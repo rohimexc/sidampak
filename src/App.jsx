@@ -1184,37 +1184,20 @@ const DashboardView = ({ profile, logbooks, isLogbooksLoading, isLaporanLoading,
     };
   }, [mkProgress, profile]);
 
-  // Cache reminder per sesi browser (sessionStorage), supaya tombol tidak
-  // bisa dispam berkali-kali dalam 12 jam tanpa perlu tabel khusus di server.
+  // Reminder WhatsApp ke Mentor & DPL -- server (handleSendReminder_ di
+  // Api.gs) yang menentukan target, menyusun pesan + magic link, MENGIRIM
+  // sungguhan lewat gateway WA, dan mengecek cooldown 12 jam. Frontend
+  // di sini hanya menampilkan hasilnya -- tidak ada lagi simulasi
+  // setTimeout/sessionStorage seperti versi sebelumnya (yang TIDAK
+  // benar-benar mengirim apa pun).
   const handleSendReminder = async () => {
-    const cacheKey = `last_reminder_${profile.nim}`;
-    const lastReminder = Number(sessionStorage.getItem(cacheKey) || 0);
-    const now = Date.now();
-    
-    if (lastReminder && (now - lastReminder < (12 * 60 * 60 * 1000))) {
-      showToast("Tunggu! Anda sudah mengirim reminder dalam 12 jam terakhir.", "error");
-      return;
-    }
-
     setIsReminding(true);
-    
-    const hasMentor = profile.mentorWa && profile.mentorWa.length > 3;
-    const targetWa = hasMentor ? profile.mentorWa : profile.dplWa;
-    const targetName = hasMentor ? profile.mentorNama : profile.dplNama;
-
-    const tokenParams = `?token=rev_${profile.nim}_${Math.random().toString(36).substring(7)}`;
-    const magicLink = `${window.location.origin}${window.location.pathname}${tokenParams}`;
-
-    const textMsg = `Halo Bapak/Ibu ${targetName},\n\nMahasiswa bimbingan Anda, *${profile.nama}* (${profile.nim}) memiliki Logbook MBKM Kampus Berdampak yang menunggu untuk direview.\n\nSilakan klik tautan aman berikut untuk meninjau tanpa perlu login:\n${magicLink}\n\nTerima kasih.`;
-
     try {
-      setTimeout(() => {
-        showToast("Pesan WhatsApp berhasil dikirim ke pembimbing!", "success");
-        sessionStorage.setItem(cacheKey, String(now));
-        setIsReminding(false);
-      }, 1500);
-    } catch (error) {
-      showToast("Koneksi gagal. Cek internet Anda.", "error");
+      const result = await api.sendReminder(profile.nim);
+      showToast(result.message || 'Reminder terkirim.', 'success');
+    } catch (err) {
+      showToast(err.message || 'Gagal mengirim reminder. Cek koneksi internet Anda.', 'error');
+    } finally {
       setIsReminding(false);
     }
   };
@@ -2494,6 +2477,11 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
   const [mhsList, setMhsList] = useState([]);
   const [pendingLogs, setPendingLogs] = useState([]);
   const [pendingLaporan, setPendingLaporan] = useState([]);
+  // Identitas pemilik token ini (role: 'mentor'|'dpl', nama, dst) --
+  // dikembalikan server di handleGetReviewerQueue_ supaya halaman bisa
+  // menyapa "Halo, Bapak/Ibu [nama]" dan reviewer tahu link ini memang
+  // untuknya (lihat buildReviewerIdentity_ di Api.gs).
+  const [reviewerInfo, setReviewerInfo] = useState(null);
 
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailData, setDetailData] = useState(null); // { mahasiswa, mataKuliah, logbooks, laporan }
@@ -2502,17 +2490,23 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
   const [revisiModal, setRevisiModal] = useState({ isOpen: false, itemId: null, type: '', text: '' });
   const [isSubmittingRevisi, setIsSubmittingRevisi] = useState(false);
 
+  // Tanpa token sama sekali, jangan coba request apa pun ke server --
+  // tampilkan pesan akses ditolak langsung (lihat render di bawah).
+  const hasToken = !!reviewerToken;
+
   const loadQueue = useCallback(async () => {
+    if (!hasToken) { setIsLoadingQueue(false); return; }
     let gotCacheHit = false;
     setLoadError('');
 
-    const fetchPromise = api.getReviewerQueue({
+    const fetchPromise = api.getReviewerQueue(reviewerToken, {
       onCacheHit: (cached) => {
         if (!cached) return;
         gotCacheHit = true;
         setMhsList(cached.mahasiswa || []);
         setPendingLogs(cached.pendingLogs || []);
         setPendingLaporan(cached.pendingLaporan || []);
+        setReviewerInfo(cached.reviewer || null);
         setIsLoadingQueue(false); // sudah ada sesuatu untuk ditampilkan
       },
     });
@@ -2525,6 +2519,7 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
       setMhsList(data.mahasiswa || []);
       setPendingLogs(data.pendingLogs || []);
       setPendingLaporan(data.pendingLaporan || []);
+      setReviewerInfo(data.reviewer || null);
     } catch (err) {
       if (!gotCacheHit) setLoadError(err.message || 'Gagal memuat antrean.');
       // Kalau sudah ada cache yang tampil, kegagalan refresh di belakang
@@ -2532,7 +2527,7 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
     } finally {
       setIsLoadingQueue(false);
     }
-  }, []);
+  }, [hasToken, reviewerToken]);
 
   useEffect(() => {
     loadQueue();
@@ -2541,7 +2536,7 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
   const loadMahasiswaDetail = useCallback(async (nim) => {
     let gotCacheHit = false;
 
-    const fetchPromise = api.getMahasiswaDetailForReviewer(nim, {
+    const fetchPromise = api.getMahasiswaDetailForReviewer(nim, reviewerToken, {
       onCacheHit: (cached) => {
         if (!cached) return;
         gotCacheHit = true;
@@ -2567,7 +2562,7 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
     } finally {
       setDetailLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, reviewerToken]);
 
   useEffect(() => {
     if (selectedMhsId) loadMahasiswaDetail(selectedMhsId);
@@ -2576,7 +2571,7 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
   const handleApprove = async (id, type) => {
     setActionLoadingId(id);
     try {
-      await api.reviewApprove(type, id);
+      await api.reviewApprove(type, id, reviewerToken);
       showToast(`${type === 'laporan' ? 'Laporan' : 'Logbook'} disetujui!`, 'success');
       // Refresh antrean & detail (kalau sedang melihat detail mahasiswa)
       await loadQueue();
@@ -2595,7 +2590,7 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
     }
     setIsSubmittingRevisi(true);
     try {
-      await api.reviewRevisi(revisiModal.type, revisiModal.itemId, revisiModal.text);
+      await api.reviewRevisi(revisiModal.type, revisiModal.itemId, revisiModal.text, reviewerToken);
       showToast(`${revisiModal.type === 'laporan' ? 'Laporan' : 'Logbook'} dikembalikan untuk revisi.`, 'success');
       setRevisiModal({ isOpen: false, itemId: null, type: '', text: '' });
       await loadQueue();
@@ -2628,6 +2623,18 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
       return { ...mk, targetHours, currentHours, percentage };
     });
   }, [detailData]);
+
+  if (!hasToken) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900 h-full p-8 text-center">
+        <Lock className="w-10 h-10 text-rose-500 mb-3" />
+        <p className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-1">Akses Ditolak</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          Halaman ini hanya bisa diakses lewat tautan aman (magic link) yang dikirim ke WhatsApp Mentor/DPL. Tidak ada token akses pada tautan ini.
+        </p>
+      </div>
+    );
+  }
 
   if (isLoadingQueue) {
     return <PageLoader label="Memuat antrean review..." />;
@@ -2834,6 +2841,11 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
           <Lock className="w-3 h-3"/> Akses Aman (Token)
         </p>
         <h1 className="text-2xl font-extrabold tracking-tight">Portal Reviewer</h1>
+        {reviewerInfo?.nama && (
+          <p className="text-sm text-slate-300 mt-1">
+            Halo, {reviewerInfo.role === 'dpl' ? 'Bapak/Ibu Dosen' : 'Bapak/Ibu'} <span className="font-bold text-white">{reviewerInfo.nama}</span>
+          </p>
+        )}
         
         <div className="grid grid-cols-3 gap-3 sm:gap-6 mt-6 md:px-10">
           <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 sm:p-5 border border-white/10 flex flex-col items-center justify-center">

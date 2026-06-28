@@ -3,7 +3,7 @@
 // + Cache layer (stale-while-revalidate) untuk pengalaman instan.
 // =====================================================================
 
-export const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbyZGMnx-S97-1sOMHQR4hU0LdwdT9k3H3NOJ2G17c5jvCHPlmb2CO7kfyjHLdZKfP5G/exec';
+export const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwpLDhR3clI_ECVI2IYoV2PQe95p9PeVK7HYQk5Y7U_tV-ly7fSeh121K01byy0M1R3/exec';
 
 // ---------------------------------------------------------------------
 // Fetch dasar
@@ -212,26 +212,36 @@ export const api = {
     }),
 
   // --- REVIEWER ---
-  getReviewerQueue: (opts = {}) =>
-    swr('reviewerQueue', () => apiGet('getReviewerQueue'), {
+  // Semua aksi reviewer SEKARANG wajib menyertakan token (lihat
+  // parseReviewerToken_ di Api.gs) -- tanpa token valid, server menolak
+  // akses (INVALID_TOKEN). Cache key disertai token supaya reviewer
+  // berbeda (mentor A vs mentor B) yang kebetulan memakai browser/device
+  // yang sama TIDAK saling melihat cache antrean satu sama lain.
+  getReviewerQueue: (token, opts = {}) =>
+    swr(`reviewerQueue_${token}`, () => apiGet('getReviewerQueue', { token }), {
       onCacheHit: opts.onCacheHit,
       maxAgeMs: 5 * 60 * 1000,
     }),
-  getMahasiswaDetailForReviewer: (nim, opts = {}) =>
-    swr(`reviewerDetail_${nim}`, () => apiGet('getMahasiswaDetailForReviewer', { nim }), {
+  getMahasiswaDetailForReviewer: (nim, token, opts = {}) =>
+    swr(`reviewerDetail_${token}_${nim}`, () => apiGet('getMahasiswaDetailForReviewer', { nim, token }), {
       onCacheHit: opts.onCacheHit,
       maxAgeMs: 5 * 60 * 1000,
     }),
-  reviewApprove: async (type, id) => {
-    const result = await apiPost('reviewApprove', { type, id });
-    cacheClearPrefix('reviewer'); // antrean & semua detail mahasiswa jadi basi
+  reviewApprove: async (type, id, token) => {
+    const result = await apiPost('reviewApprove', { type, id, token });
+    cacheClearPrefix('reviewer'); // antrean & semua detail mahasiswa (semua reviewer) jadi basi
     return result;
   },
-  reviewRevisi: async (type, id, catatan) => {
-    const result = await apiPost('reviewRevisi', { type, id, catatan });
+  reviewRevisi: async (type, id, catatan, token) => {
+    const result = await apiPost('reviewRevisi', { type, id, catatan, token });
     cacheClearPrefix('reviewer');
     return result;
   },
+
+  // Reminder WhatsApp ke Mentor & DPL (lihat handleSendReminder_ di
+  // Api.gs) -- server yang benar-benar mengirim lewat gateway WA &
+  // mencatat cooldown, BUKAN simulasi seperti versi sebelumnya.
+  sendReminder: (nim) => apiPost('sendReminder', { nim }),
 };
 
 // ---------------------------------------------------------------------
