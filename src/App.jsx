@@ -593,13 +593,21 @@ const LocationPicker = ({ position, setPosition, setTempLokasi }) => {
   );
 };
 // 3. Profile Setup View
-const ProfileSetupView = ({ userProfile, currentNim, masterData, onSave, onBack, showToast }) => {
+const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggestions, onSave, onBack, showToast }) => {
   const [step, setStep] = useState(1);
   const [isSaving, setIsSaving] = useState(false);
 
   const fakultasOptions = masterData?.fakultas?.length ? masterData.fakultas : FAKULTAS_LIST_FALLBACK;
   const prodiOptions = masterData?.prodi?.length ? masterData.prodi.map(p => p.nama) : PRODI_LIST_FALLBACK;
   const programOptions = masterData?.jenisProgram?.length ? masterData.jenisProgram : PROGRAM_LIST_FALLBACK;
+
+  // Saran datalist Nama Program & Nama Mitra (lihat ProgramSuggestions di
+  // api.js). Tidak ada fallback hardcode di sini -- belum ada data hanya
+  // berarti belum ada saran yang muncul, field tetap berfungsi normal
+  // sebagai input teks bebas (datalist HTML bersifat opsional, tidak
+  // memvalidasi/membatasi nilai yang diketik).
+  const namaProgramSuggestions = programSuggestions?.namaProgram || [];
+  const mitraSuggestions = programSuggestions?.mitra || [];
   
   // PERBAIKAN: Memastikan object 'dokumen' selalu ada (Backward Compatibility)
   const [formData, setFormData] = useState(() => {
@@ -766,8 +774,29 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, onSave, onBack,
               <SearchableSelect label="Program Studi" options={prodiOptions} value={formData.prodi} onChange={v => handleChange('prodi', v)} placeholder="Pilih Prodi..." />
               <SearchableSelect label="Jenis Program MBKM" options={programOptions} value={formData.jenisProgram} onChange={v => handleChange('jenisProgram', v)} placeholder="Pilih Program..." />
               
-              <Input label="Nama Spesifik Program" placeholder="Cth: Kampus Mengajar Batch 6" value={formData.namaProgram} onChange={e => handleChange('namaProgram', e.target.value)} />
-              <Input label="Nama Mitra Penugasan" placeholder="Cth: SD Negeri 1 Palu" value={formData.mitra} onChange={e => handleChange('mitra', e.target.value)} />
+              <Input
+                label="Nama Spesifik Program"
+                placeholder="Cth: Kampus Mengajar Batch 6"
+                value={formData.namaProgram}
+                onChange={e => handleChange('namaProgram', e.target.value)}
+                list="datalist-nama-program"
+                autoComplete="off"
+              />
+              <datalist id="datalist-nama-program">
+                {namaProgramSuggestions.map(nama => <option key={nama} value={nama} />)}
+              </datalist>
+
+              <Input
+                label="Nama Mitra Penugasan"
+                placeholder="Cth: SD Negeri 1 Palu"
+                value={formData.mitra}
+                onChange={e => handleChange('mitra', e.target.value)}
+                list="datalist-nama-mitra"
+                autoComplete="off"
+              />
+              <datalist id="datalist-nama-mitra">
+                {mitraSuggestions.map(nama => <option key={nama} value={nama} />)}
+              </datalist>
               
               <div className="mb-4">
                 <label className="block text-xs font-bold tracking-wide text-slate-500 dark:text-slate-400 uppercase mb-1.5 ml-1">Lokasi Penugasan (Wajib)</label>
@@ -3036,6 +3065,7 @@ export default function App() {
   const [reviewerToken, setReviewerToken] = useState(null);
   const [toast, setToast] = useState({ message: '', type: 'success' });
   const [masterData, setMasterData] = useState(null);
+  const [programSuggestions, setProgramSuggestions] = useState(null);
   const [isLoadingDashboardData, setIsLoadingDashboardData] = useState(false);
   // Loading per-section: profil tidak lagi menunggu logbook/laporan untuk
   // tampil. Masing-masing punya status loading sendiri supaya DashboardView
@@ -3072,6 +3102,15 @@ export default function App() {
     api.getMasterData({ onCacheHit: setMasterData })
       .then(setMasterData)
       .catch(() => {}); // gagal refresh tidak fatal -- fallback hardcode tetap ada di component
+  }, []);
+
+  // Saran Nama Program & Nama Mitra (datalist) untuk ProfileSetupView --
+  // gagal diam-diam tidak fatal, field tetap berfungsi sebagai input
+  // teks bebas tanpa saran kalau request ini gagal.
+  useEffect(() => {
+    api.getProgramSuggestions({ onCacheHit: setProgramSuggestions })
+      .then(setProgramSuggestions)
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -3371,6 +3410,7 @@ export default function App() {
             userProfile={profile} 
             currentNim={user?.nim} 
             masterData={masterData}
+            programSuggestions={programSuggestions}
             onSave={handleSaveProfile} 
             onBack={profile ? () => setView('dashboard') : null} 
             showToast={showToast} 

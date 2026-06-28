@@ -3,7 +3,7 @@
 // + Cache layer (stale-while-revalidate) untuk pengalaman instan.
 // =====================================================================
 
-export const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbw8wO-PgvkkgMdIyf2YZUZ39fpfNmzWlQQyOhQ4dfhN8nJeyn_KXcjG8jTGxD_2fGVe/exec';
+export const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbyZGMnx-S97-1sOMHQR4hU0LdwdT9k3H3NOJ2G17c5jvCHPlmb2CO7kfyjHLdZKfP5G/exec';
 
 // ---------------------------------------------------------------------
 // Fetch dasar
@@ -196,6 +196,17 @@ export const api = {
   // --- MASTER DATA --- (Fakultas/Prodi/JenisProgram jarang berubah -> cache lama aman)
   getMasterData: (opts = {}) =>
     swr('masterData', () => apiGet('getMasterData'), {
+      onCacheHit: opts.onCacheHit,
+      maxAgeMs: 24 * 60 * 60 * 1000, // 24 jam
+    }),
+
+  // Saran (datalist) Nama Program & Nama Mitra di ProfileSetupView,
+  // diambil dari nilai yang sudah pernah diisi mahasiswa lain (tabel
+  // Program). Sama seperti getMasterData, ini cache lama (24 jam) aman
+  // dipakai -- daftar program/mitra tidak berubah drastis tiap hari, dan
+  // ini cuma SARAN (datalist), bukan validasi, jadi tidak kritis fresh.
+  getProgramSuggestions: (opts = {}) =>
+    swr('programSuggestions', () => apiGet('getProgramSuggestions'), {
       onCacheHit: opts.onCacheHit,
       maxAgeMs: 24 * 60 * 60 * 1000, // 24 jam
     }),
