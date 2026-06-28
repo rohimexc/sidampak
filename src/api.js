@@ -3,7 +3,7 @@
 // + Cache layer (stale-while-revalidate) untuk pengalaman instan.
 // =====================================================================
 
-export const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwesq-Y4DeuuFvusxOgekfIoXdEANnCqYcPZtftddxn5GnrYYfkcpI2BTlDVrqSUb0L/exec';
+export const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbw8wO-PgvkkgMdIyf2YZUZ39fpfNmzWlQQyOhQ4dfhN8nJeyn_KXcjG8jTGxD_2fGVe/exec';
 
 // ---------------------------------------------------------------------
 // Fetch dasar
@@ -26,6 +26,23 @@ async function apiPost(action, payload = {}) {
   const json = await res.json();
   if (!json.ok) throw new Error(json.message || 'Permintaan gagal.');
   return json.data;
+}
+
+// ---------------------------------------------------------------------
+// WARM-UP GAS — Google Apps Script "dingin" (belum ada instance aktif
+// untuk Web App ini) bisa butuh beberapa detik ekstra HANYA untuk start,
+// di atas waktu eksekusi aksi sesungguhnya. ping() TIDAK menyentuh
+// Spreadsheet sama sekali (lihat handlePing_ di Api.gs) -- tujuannya
+// murni supaya instance GAS sudah "panas" SAAT pengguna menekan tombol
+// Mulai Sesi/Submit, bukan baru dipanggil tepat saat itu.
+//
+// Sengaja TIDAK pakai await/throw ke pemanggil -- ini optimisasi
+// best-effort. Kalau gagal (offline, dsb), tidak masalah; aksi
+// sesungguhnya (login/save) tetap berjalan normal seperti biasa,
+// hanya tanpa keuntungan warm-up.
+// ---------------------------------------------------------------------
+export function pingServer() {
+  apiGet('ping').catch(() => {});
 }
 
 // ---------------------------------------------------------------------
@@ -120,11 +137,17 @@ export const api = {
       maxAgeMs: 30 * 60 * 1000, // 30 menit
     }),
   saveProfile: async (payload) => {
-    const result = await apiPost('saveProfile', payload);
-    // Profil berubah -> cache lama pasti basi, hapus supaya getProfile
-    // berikutnya tidak sempat menampilkan versi lama sepersekian detik.
-    cacheClear(`profile_${payload.nim}`);
-    return result;
+    // Server (handleSaveProfile_) sekarang langsung mengembalikan profil
+    // LENGKAP terbaru (bentuk sama dengan getProfile) di response save
+    // ini -- TIDAK perlu lagi memanggil getProfile setelahnya. Itu
+    // menghapus satu round-trip penuh ke GAS, yang sebelumnya jadi
+    // alasan utama "simpan profil" terasa lama (2x latency GAS berurutan).
+    const freshProfile = await apiPost('saveProfile', payload);
+    // Isi cache langsung dengan hasil fresh ini supaya pemuatan
+    // berikutnya (refresh halaman, dsb) tetap instan & akurat tanpa
+    // perlu menunggu getProfile terpisah lagi.
+    cacheSet(`profile_${payload.nim}`, freshProfile);
+    return freshProfile;
   },
 
   // --- LOGBOOK ---
@@ -134,14 +157,20 @@ export const api = {
       maxAgeMs: 10 * 60 * 1000, // 10 menit -- logbook lebih sering berubah
     }),
   saveLogbook: async (payload) => {
-    const result = await apiPost('saveLogbook', payload);
-    cacheClear(`logbooks_${payload.nim}`);
-    return result;
+    // Server (handleSaveLogbook_) sekarang langsung mengembalikan SELURUH
+    // DAFTAR logbook terbaru (termasuk link foto final dari Drive,
+    // bentuk sama dengan getLogbooks) -- tidak perlu getLogbooks lagi
+    // sesudahnya. Menghapus satu round-trip GAS penuh per simpan logbook.
+    const freshLogbooks = await apiPost('saveLogbook', payload);
+    cacheSet(`logbooks_${payload.nim}`, freshLogbooks);
+    return freshLogbooks;
   },
   deleteLogbook: async (payload) => {
-    const result = await apiPost('deleteLogbook', payload);
-    cacheClear(`logbooks_${payload.nim}`);
-    return result;
+    // Sama seperti saveLogbook -- server mengembalikan list terbaru
+    // setelah penghapusan, langsung dipakai tanpa fetch ulang.
+    const freshLogbooks = await apiPost('deleteLogbook', payload);
+    cacheSet(`logbooks_${payload.nim}`, freshLogbooks);
+    return freshLogbooks;
   },
 
   // --- LAPORAN ---
@@ -151,9 +180,12 @@ export const api = {
       maxAgeMs: 10 * 60 * 1000,
     }),
   saveLaporan: async (payload) => {
-    const result = await apiPost('saveLaporan', payload);
-    cacheClear(`laporan_${payload.nim}`);
-    return result;
+    // Server (handleSaveLaporan_) sekarang langsung mengembalikan object
+    // laporan LENGKAP terbaru (bentuk sama dengan getLaporan, termasuk
+    // fileLink final dari Drive) -- tidak perlu getLaporan lagi sesudahnya.
+    const freshLaporan = await apiPost('saveLaporan', payload);
+    cacheSet(`laporan_${payload.nim}`, freshLaporan);
+    return freshLaporan;
   },
   deleteLaporan: async (payload) => {
     const result = await apiPost('deleteLaporan', payload);

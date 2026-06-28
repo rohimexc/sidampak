@@ -12,7 +12,7 @@ import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
-import { api, session, localDrafts, theme } from './api';
+import { api, session, localDrafts, theme, pingServer } from './api';
 
 // --- MOCK DATA & CONSTANTS (yang TIDAK datang dari server) ---
 // Daftar ini dipakai sebagai fallback kalau getMasterData() belum selesai
@@ -262,12 +262,12 @@ const SearchableSelect = ({ label, options, value, onChange, placeholder, onAddC
         <Search className="absolute right-4 top-3.5 text-slate-400 dark:text-slate-500 w-5 h-5 pointer-events-none" />
       </div>
       {isOpen && (
-        <div className="absolute z-20 w-full mt-2 bg-white/95 backdrop-blur-xl border border-slate-200 dark:border-slate-600 rounded-2xl shadow-xl max-h-56 overflow-y-auto ring-1 ring-slate-900/5">
+        <div className="absolute z-20 w-full mt-2 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl dark:shadow-slate-900/50 max-h-56 overflow-y-auto ring-1 ring-slate-900/5 dark:ring-white/5">
           {filteredOptions.length > 0 ? (
             filteredOptions.map((opt, i) => (
               <div 
                 key={i} 
-                className="px-4 py-3 hover:bg-indigo-50 hover:text-indigo-700 cursor-pointer text-sm font-medium text-slate-700 dark:text-slate-200 transition-colors border-b border-slate-50 dark:border-slate-800 last:border-0"
+                className="px-4 py-3 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 hover:text-indigo-700 dark:hover:text-indigo-300 cursor-pointer text-sm font-medium text-slate-700 dark:text-slate-200 transition-colors border-b border-slate-50 dark:border-slate-700/50 last:border-0"
                 onClick={() => handleSelect(opt)}
               >
                 {opt}
@@ -280,7 +280,7 @@ const SearchableSelect = ({ label, options, value, onChange, placeholder, onAddC
           {searchTerm.trim() && !isExactMatch && onAddCustom && (
             <button 
               type="button"
-              className="w-full p-3 bg-indigo-50 text-indigo-600 font-bold hover:bg-indigo-100 transition-colors flex justify-center items-center gap-2 border-t border-indigo-100"
+              className="w-full p-3 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors flex justify-center items-center gap-2 border-t border-indigo-100 dark:border-indigo-800/50"
               onClick={handleAddCustom}
             >
               <Plus className="w-4 h-4"/> Input "{searchTerm}" (Enter)
@@ -309,6 +309,14 @@ const LoginView = ({ onLogin, themeMode, onToggleTheme }) => {
   const [regPasswordConfirm, setRegPasswordConfirm] = useState('');
   const [regError, setRegError] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
+
+  // Warm-up GAS begitu LoginView pertama tampil -- mahasiswa biasanya
+  // perlu beberapa detik untuk mengetik NIM & password, waktu itu cukup
+  // untuk "memanaskan" instance GAS di belakang sebelum tombol Mulai
+  // Sesi ditekan. Lihat catatan lengkap di pingServer (api.js).
+  useEffect(() => {
+    pingServer();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -805,9 +813,13 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, onSave, onBack,
 
         {step === 2 && (
           <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-500">
-            <div className="bg-gradient-to-br from-indigo-500 to-blue-600 p-6 rounded-[2rem] text-white shadow-lg shadow-indigo-200">
-              <h2 className="text-xl font-bold mb-2 flex items-center gap-2"><BookOpen className="w-6 h-6"/> Rekognisi Matkul</h2>
-              <p className="text-indigo-100 text-sm leading-relaxed">Tambahkan matakuliah dari KRS yang akan direkognisi. Sistem menggunakan standar <b>1 SKS = 45 Jam</b> aktivitas.</p>
+            <div className="bg-gradient-to-br from-indigo-500 to-blue-600 dark:from-indigo-800 dark:to-blue-900 border border-transparent dark:border-indigo-700/50 p-6 rounded-[2rem] text-white shadow-lg shadow-indigo-200 dark:shadow-indigo-900/40">
+              <h2 className="text-xl font-bold mb-2 flex items-center gap-2">
+                <BookOpen className="w-6 h-6" /> Rekognisi Matkul
+              </h2>
+              <p className="text-indigo-100 dark:text-indigo-200/90 text-sm leading-relaxed">
+                Tambahkan matakuliah dari KRS yang akan direkognisi. Sistem menggunakan standar <b className="text-white dark:text-indigo-50">1 SKS = 45 Jam</b> aktivitas.
+              </p>
             </div>
             
             <div className="bg-white dark:bg-slate-800 p-5 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-700">
@@ -850,10 +862,10 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, onSave, onBack,
 
         {step === 3 && (
           <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-500">
-            <div className="bg-amber-50 p-5 rounded-[2rem] border border-amber-100 flex gap-4 items-start shadow-sm">
-              <Info className="w-6 h-6 text-amber-500 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-amber-700 font-medium leading-relaxed">
-                Data ini akan digunakan untuk mengirimkan <b>Link Review</b> ke Mentor/DPL via WhatsApp. Pastikan data yang dimasukkan sudah benar dan sesuai termasuk nomor WhatsApp dan email aktif.
+            <div className="bg-amber-50 dark:bg-amber-900/20 p-5 rounded-[2rem] border border-amber-100 dark:border-amber-800/50 flex gap-4 items-start shadow-sm">
+              <Info className="w-6 h-6 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-amber-700 dark:text-amber-200 font-medium leading-relaxed">
+                Data ini akan digunakan untuk mengirimkan <b className="text-amber-900 dark:text-amber-100">Link Review</b> ke Mentor/DPL via WhatsApp. Pastikan data yang dimasukkan sudah benar dan sesuai termasuk nomor WhatsApp dan email aktif.
               </p>
             </div>
 
@@ -881,10 +893,10 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, onSave, onBack,
 
         {step === 4 && (
           <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-500">
-            <div className="bg-emerald-50 p-5 rounded-[2rem] border border-emerald-100 flex gap-4 items-start shadow-sm">
-              <FileText className="w-6 h-6 text-emerald-500 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-emerald-700 font-medium leading-relaxed">
-                Unggah berkas pendukung administrasi Anda (Opsional). Pastikan semua berkas berformat <b>PDF</b> (Maks 5MB per file).
+            <div className="bg-emerald-50 dark:bg-emerald-900/20 p-5 rounded-[2rem] border border-emerald-100 dark:border-emerald-800/50 flex gap-4 items-start shadow-sm">
+              <FileText className="w-6 h-6 text-emerald-500 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-emerald-700 dark:text-emerald-200 font-medium leading-relaxed">
+                Unggah berkas pendukung administrasi Anda (Opsional). Pastikan semua berkas berformat <b className="text-emerald-900 dark:text-emerald-100">PDF</b> (Maks 5MB per file).
               </p>
             </div>
 
@@ -1014,7 +1026,7 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, onSave, onBack,
           <button 
             onClick={handleFinalSave} 
             disabled={isSaving}
-            className="flex-1 py-4 font-bold rounded-2xl text-white shadow-lg transition-all flex justify-center items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-500 shadow-emerald-500/30 hover:shadow-emerald-500/50 active:scale-95 disabled:opacity-70"
+            className="flex-1 py-4 font-bold rounded-2xl text-white shadow-lg transition-all flex justify-center items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-500 dark:from-emerald-400 dark:to-teal-400 shadow-emerald-500/30 dark:shadow-emerald-400/20 hover:shadow-emerald-500/50 dark:hover:shadow-emerald-400/40 active:scale-95 disabled:opacity-70"
           >
             {isSaving ? <><ButtonSpinner /> Menyimpan...</> : <><CheckCircle className="w-5 h-5" /> Simpan Profil</>}
           </button>
@@ -1080,7 +1092,7 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, onSave, onBack,
   );
 };
 // 4. Dashboard View
-const DashboardView = ({ profile, logbooks, localDraftsList: localDraftsProp, onNewLogbook, onEditProfile, onLogout, showToast, onEditLogbook, onDeleteLogbook, onEditLocalDraft, onDiscardLocalDraft, onViewLaporan, onViewAllLogs, themeMode, onToggleTheme }) => {
+const DashboardView = ({ profile, logbooks, isLogbooksLoading, isLaporanLoading, localDraftsList: localDraftsProp, onNewLogbook, onEditProfile, onLogout, showToast, onEditLogbook, onDeleteLogbook, onEditLocalDraft, onDiscardLocalDraft, onViewLaporan, onViewAllLogs, themeMode, onToggleTheme }) => {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [isReminding, setIsReminding] = useState(false);
@@ -1401,6 +1413,22 @@ const DashboardView = ({ profile, logbooks, localDraftsList: localDraftsProp, on
         </div>
 
         <div className="space-y-4">
+          {isLogbooksLoading && logbooks.length === 0 && (
+            <>
+              {[0, 1, 2].map(i => (
+                <div key={`skeleton-${i}`} className="bg-white dark:bg-slate-800 p-5 rounded-[2rem] border border-slate-100 dark:border-slate-700 animate-pulse">
+                  <div className="flex gap-4">
+                    <div className="bg-slate-100 dark:bg-slate-700 w-14 h-14 rounded-2xl flex-shrink-0" />
+                    <div className="flex-1 min-w-0 flex flex-col justify-center gap-2">
+                      <div className="h-3.5 bg-slate-100 dark:bg-slate-700 rounded-full w-2/3" />
+                      <div className="h-3 bg-slate-100 dark:bg-slate-700 rounded-full w-full" />
+                      <div className="h-3 bg-slate-100 dark:bg-slate-700 rounded-full w-1/4 mt-1" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
           {logbooks.slice(0, 5).map(lb => (
             <div key={lb.id} className={`relative bg-white dark:bg-slate-800 p-5 rounded-[2rem] shadow-sm border transition-colors group overflow-hidden
               ${lb.status.includes('Revisi') ? 'border-rose-200 shadow-rose-100/50' : 'border-slate-100 dark:border-slate-700 hover:border-indigo-100'}`}>
@@ -1466,7 +1494,7 @@ const DashboardView = ({ profile, logbooks, localDraftsList: localDraftsProp, on
               )}
             </div>
           ))}
-          {logbooks.length === 0 && (
+          {!isLogbooksLoading && logbooks.length === 0 && (
             <div className="text-center p-10 bg-white dark:bg-slate-800 rounded-[2rem] border-2 border-dashed border-slate-200 dark:border-slate-600">
               <FileText className="w-12 h-12 text-slate-300 mx-auto mb-4" />
               <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">Belum ada aktivitas.</p>
@@ -3009,6 +3037,12 @@ export default function App() {
   const [toast, setToast] = useState({ message: '', type: 'success' });
   const [masterData, setMasterData] = useState(null);
   const [isLoadingDashboardData, setIsLoadingDashboardData] = useState(false);
+  // Loading per-section: profil tidak lagi menunggu logbook/laporan untuk
+  // tampil. Masing-masing punya status loading sendiri supaya DashboardView
+  // bisa menampilkan skeleton kecil di section terkait, bukan blocking
+  // seluruh halaman menunggu request yang paling lambat.
+  const [isLogbooksLoading, setIsLogbooksLoading] = useState(false);
+  const [isLaporanLoading, setIsLaporanLoading] = useState(false);
   // Tema: 'light' | 'dark'. Diinisialisasi dari preferensi tersimpan, atau
   // ikut preferensi sistem/OS kalau pengguna belum pernah memilih secara
   // eksplisit (lihat theme.getInitial() di api.js).
@@ -3064,46 +3098,94 @@ export default function App() {
   }, []);
 
   // ---------------------------------------------------------------------
-  // Memuat Profil + Logbook + Laporan dengan strategi "tampil instan,
-  // perbarui di belakang". Kalau ada cache (dari kunjungan sebelumnya):
-  //   1. Render dashboard SEKETIKA dari cache -- tanpa spinner sama sekali.
-  //   2. Tiga fetch (profil/logbook/laporan) tetap jalan paralel di
-  //      background; begitu masing-masing selesai, state diperbarui diam-
-  //      diam (tidak memutus interaksi pengguna).
-  // Kalau TIDAK ada cache (login pertama kali di perangkat ini), baru
-  // tampilkan PageLoader sambil menunggu data asli -- karena memang belum
-  // ada apa pun yang bisa ditampilkan.
+  // Memuat Profil, Logbook, dan Laporan secara INDEPENDEN -- masing-masing
+  // tidak menunggu yang lain. Strategi "tampil instan, perbarui di
+  // belakang":
+  //   1. Profil menentukan kapan dashboard boleh dirender. Begitu profil
+  //      siap (dari cache ATAU server, mana pun lebih dulu), dashboard
+  //      langsung tampil -- TANPA menunggu logbook/laporan selesai.
+  //   2. Logbook & laporan punya status loading sendiri-sendiri
+  //      (isLogbooksLoading/isLaporanLoading) supaya section masing-masing
+  //      bisa menampilkan skeleton kecil sambil data masih dimuat,
+  //      sementara sisa dashboard sudah interaktif.
+  // Kalau profil TIDAK ada cache (login pertama kali di perangkat ini),
+  // baru tampilkan PageLoader sambil menunggu profil dari server -- karena
+  // memang belum ada apa pun yang bisa ditampilkan.
   // ---------------------------------------------------------------------
   const loadUserData = async (nim) => {
-    let gotAnyCacheHit = false;
+    let gotProfileCacheHit = false;
 
+    // ---------------------------------------------------------------
+    // PROFIL -- ini satu-satunya yang menentukan kapan dashboard boleh
+    // dirender (karena DashboardView butuh `profile`). Begitu profil siap
+    // (dari cache ATAU dari server, mana pun lebih dulu), langsung pindah
+    // ke 'dashboard'. TIDAK menunggu logbook/laporan sama sekali.
+    // ---------------------------------------------------------------
     const profilePromise = api.getProfile(nim, {
       onCacheHit: (cached) => {
         if (!cached) return;
-        gotAnyCacheHit = true;
+        gotProfileCacheHit = true;
         setProfile(cached);
         setView('dashboard'); // langsung tampil, tidak menunggu network
       },
     });
-    const logbookPromise = api.getLogbooks(nim, {
-      onCacheHit: (cached) => setLogbooks(cached || []),
-    });
-    const laporanPromise = api.getLaporan(nim, {
-      onCacheHit: (cached) => setLaporanAkhir(cached || null),
-    });
 
-    // Beri microtask sekejap untuk onCacheHit di atas sempat berjalan
-    // sebelum kita putuskan apakah perlu menampilkan spinner.
+    // ---------------------------------------------------------------
+    // LOGBOOK & LAPORAN -- berjalan independen dari profil. Masing-masing
+    // punya status loading sendiri (isLogbooksLoading/isLaporanLoading)
+    // supaya DashboardView bisa menampilkan skeleton kecil khusus di
+    // section itu saja, tanpa menahan tampilan profil/dashboard secara
+    // keseluruhan. Cache hit langsung tampil; fetch fresh tetap jalan di
+    // belakang dan menimpa begitu selesai.
+    // ---------------------------------------------------------------
+    let gotLogbookCacheHit = false;
+    setIsLogbooksLoading(true);
+    const logbookPromise = api.getLogbooks(nim, {
+      onCacheHit: (cached) => {
+        gotLogbookCacheHit = true;
+        setLogbooks(cached || []);
+      },
+    });
+    logbookPromise
+      .then((data) => setLogbooks(data || []))
+      .catch(() => {
+        if (gotLogbookCacheHit) {
+          showToast('Gagal memperbarui logbook terbaru. Menampilkan data tersimpan.', 'error');
+        }
+        // Cache miss + gagal: biarkan logbooks tetap [] (state awal),
+        // dashboard tetap tampil normal tanpa blocking.
+      })
+      .finally(() => setIsLogbooksLoading(false));
+
+    let gotLaporanCacheHit = false;
+    setIsLaporanLoading(true);
+    const laporanPromise = api.getLaporan(nim, {
+      onCacheHit: (cached) => {
+        gotLaporanCacheHit = true;
+        setLaporanAkhir(cached || null);
+      },
+    });
+    laporanPromise
+      .then((data) => setLaporanAkhir(data || null))
+      .catch(() => {
+        if (gotLaporanCacheHit) {
+          showToast('Gagal memperbarui laporan terbaru. Menampilkan data tersimpan.', 'error');
+        }
+      })
+      .finally(() => setIsLaporanLoading(false));
+
+    // Beri microtask sekejap untuk onCacheHit profil sempat berjalan
+    // sebelum kita putuskan apakah perlu menampilkan spinner full-page.
+    // Spinner ini HANYA untuk kasus belum ada apa pun untuk ditampilkan
+    // (login pertama kali di perangkat ini, profil belum pernah di-cache).
     await Promise.resolve();
-    if (!gotAnyCacheHit) {
+    if (!gotProfileCacheHit) {
       setIsLoadingDashboardData(true);
       setView('loadingDashboard');
     }
 
     try {
-      const [profileData, logbookData, laporanData] = await Promise.all([
-        profilePromise, logbookPromise, laporanPromise,
-      ]);
+      const profileData = await profilePromise;
 
       if (!profileData) {
         // Belum pernah isi profil -> arahkan ke setup
@@ -3114,18 +3196,18 @@ export default function App() {
         return;
       }
 
-      // Update final dengan data fresh -- menimpa apa pun yang sempat
-      // tampil dari cache, memastikan kebenaran selalu menang.
+      // Update final dengan profil fresh -- menimpa apa pun yang sempat
+      // tampil dari cache, memastikan kebenaran selalu menang. Logbook &
+      // laporan TIDAK ditunggu di sini -- mereka menyusul sendiri lewat
+      // promise terpisah di atas begitu masing-masing selesai.
       setProfile(profileData);
-      setLogbooks(logbookData || []);
-      setLaporanAkhir(laporanData || null);
       setView('dashboard');
     } catch (err) {
-      if (gotAnyCacheHit) {
-        // Sudah terlanjur menampilkan data cache ke pengguna -- biarkan
-        // mereka tetap melihatnya, cukup beri tahu lewat toast bahwa
+      if (gotProfileCacheHit) {
+        // Sudah terlanjur menampilkan profil dari cache -- biarkan
+        // pengguna tetap melihatnya, cukup beri tahu lewat toast bahwa
         // pembaruan terbaru gagal dimuat, tanpa melempar balik ke login.
-        showToast('Gagal memperbarui data terbaru. Menampilkan data tersimpan.', 'error');
+        showToast('Gagal memperbarui profil terbaru. Menampilkan data tersimpan.', 'error');
       } else {
         showToast(err.message || 'Gagal memuat data dari server.', 'error');
         session.clear();
@@ -3177,15 +3259,16 @@ export default function App() {
   };
 
   // saveProfile mengirim seluruh formData (termasuk dokumen base64 baru &
-  // mataKuliah) ke server. Server yang menangani upload Drive & upsert
-  // semua tabel terkait (Mahasiswa, Program, MkRekognisi, DokumenPendukung,
-  // Mentor, Dosen, Pembimbing). Setelah sukses, ambil ulang profil dari
-  // server supaya state lokal konsisten dengan apa yang benar-benar tersimpan
-  // (termasuk link Drive hasil upload, menggantikan data URL base64 lokal).
+  // mataKuliah) ke server. Server menangani upload Drive & upsert semua
+  // tabel terkait (Mahasiswa, Program, MkRekognisi, DokumenPendukung,
+  // Mentor, Dosen, Pembimbing), LALU langsung mengembalikan profil
+  // lengkap terbaru (termasuk link Drive hasil upload) di response yang
+  // sama -- TIDAK perlu memanggil getProfile lagi sesudahnya. Ini
+  // menghapus satu round-trip penuh ke GAS, yang sebelumnya jadi sumber
+  // utama "simpan profil" terasa lama.
   const handleSaveProfile = async (data) => {
     try {
-      await api.saveProfile({ ...data, nim: user.nim, namaMahasiswa: data.nama });
-      const freshProfile = await api.getProfile(user.nim);
+      const freshProfile = await api.saveProfile({ ...data, nim: user.nim, namaMahasiswa: data.nama });
       setProfile(freshProfile);
       setView('dashboard');
       showToast('Profil berhasil disimpan!');
@@ -3196,7 +3279,10 @@ export default function App() {
   };
 
   // saveLogbook mengirim foto sebagai data URL base64 (file baru) atau URL
-  // Drive lama (tidak diubah). Server menentukan mana yang perlu diupload.
+  // Drive lama (tidak diubah). Server menentukan mana yang perlu diupload,
+  // LALU langsung mengembalikan SELURUH DAFTAR logbook terbaru (link foto
+  // final dari Drive) di response yang sama -- TIDAK perlu memanggil
+  // getLogbooks lagi sesudahnya. Menghapus satu round-trip GAS penuh.
   const handleSaveLogbook = async (logData) => {
     try {
       const payload = {
@@ -3205,10 +3291,7 @@ export default function App() {
         namaMahasiswa: profile?.nama,
         tahunAjaran: profile?.tahunAjaranId,
       };
-      const result = await api.saveLogbook(payload);
-
-      // Sinkronkan ulang daftar logbook dari server (link foto final dari Drive)
-      const freshLogbooks = await api.getLogbooks(user.nim);
+      const freshLogbooks = await api.saveLogbook(payload);
       setLogbooks(freshLogbooks || []);
       setEditingLogbook(null);
       setView('dashboard');
@@ -3224,6 +3307,9 @@ export default function App() {
     }
   };
 
+  // saveLaporan -- server langsung mengembalikan object laporan lengkap
+  // terbaru (termasuk fileLink final dari Drive) di response yang sama,
+  // TIDAK perlu memanggil getLaporan lagi sesudahnya.
   const handleSaveLaporan = async (data) => {
     try {
       const payload = {
@@ -3232,8 +3318,7 @@ export default function App() {
         namaMahasiswa: profile?.nama,
         tahunAjaran: profile?.tahunAjaranId,
       };
-      await api.saveLaporan(payload);
-      const freshLaporan = await api.getLaporan(user.nim);
+      const freshLaporan = await api.saveLaporan(payload);
       setLaporanAkhir(freshLaporan);
       setView('dashboard');
       showToast('Laporan Akhir berhasil disubmit!', 'success');
@@ -3278,7 +3363,7 @@ export default function App() {
         <Toast message={toast.message} type={toast.type} onClose={() => setToast({ message: '', type: 'success' })} />
 
         {view === 'loading' && <PageLoader label="Memuat Sistem..." />}
-        {view === 'loadingDashboard' && <PageLoader label="Mengambil data profil, logbook & laporan..." />}
+        {view === 'loadingDashboard' && <PageLoader label="Mengambil data profil..." />}
         {view === 'login' && <LoginView onLogin={handleLogin} themeMode={themeMode} onToggleTheme={toggleTheme} />}
         
         {view === 'setup' && (
@@ -3296,6 +3381,8 @@ export default function App() {
           <DashboardView 
             profile={profile} 
             logbooks={logbooks} 
+            isLogbooksLoading={isLogbooksLoading}
+            isLaporanLoading={isLaporanLoading}
             localDraftsList={localDraftsList}
             onNewLogbook={() => { setEditingLogbook(null); setView('logbookForm'); }} 
             onEditLogbook={(lb) => { setEditingLogbook(lb); setView('logbookForm'); }} 
