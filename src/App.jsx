@@ -1510,16 +1510,16 @@ const DashboardView = ({ profile, logbooks, isLogbooksLoading, isLaporanLoading,
                 </div>
               </div>
 
-              {lb.status !== 'Disetujui' && (
-                <div className="flex gap-2 mt-4 pt-4 border-t border-slate-50 dark:border-slate-800">
+
+              <div className="flex gap-2 mt-4 pt-4 border-t border-slate-50 dark:border-slate-800">
                   <button onClick={() => onEditLogbook(lb)} className="flex-1 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors">
                     <Pencil className="w-3.5 h-3.5" /> Edit
                   </button>
                   <button onClick={() => setConfirmDeleteId(lb.id)} className="flex-1 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors">
                     <Trash2 className="w-3.5 h-3.5" /> Hapus
                   </button>
-                </div>
-              )}
+              </div>
+
 
               {confirmDeleteId === lb.id && (
                 <div className="absolute inset-0 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center gap-3 z-10 animate-in fade-in zoom-in-95 duration-200 rounded-[2rem]">
@@ -1983,8 +1983,8 @@ const LogbookTableView = ({ logbooks, onBack, profile, onEditLogbook, onDeleteLo
                         </span>
                       </td>
                       <td className="p-3 whitespace-nowrap print:hidden">
-                        {lb.status !== 'Disetujui' ? (
-                          <div className="flex gap-1.5 justify-center">
+                        
+                        <div className="flex gap-1.5 justify-center">
                             <button 
                               onClick={() => onEditLogbook && onEditLogbook(lb)} 
                               className="p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg transition-colors"
@@ -1999,10 +1999,8 @@ const LogbookTableView = ({ logbooks, onBack, profile, onEditLogbook, onDeleteLo
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
-                          </div>
-                        ) : (
-                          <span className="text-[10px] text-slate-300 dark:text-slate-600 italic block text-center">-</span>
-                        )}
+                        </div>
+                        
                       </td>
                     </tr>
                   ))
