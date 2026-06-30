@@ -2365,7 +2365,6 @@ const LogbookFormView = ({ profile, onSave, onSaveLocalDraft, onDiscardLocalDraf
                   type="file" 
                   accept="image/*" 
                   multiple
-                  capture="environment" 
                   disabled={isBusy}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 disabled:cursor-not-allowed"
                   onChange={handleImageCapture}
