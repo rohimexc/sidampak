@@ -13,6 +13,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 import { api, session, localDrafts, theme, pingServer } from './api';
+import dosenData from './data/dosen.json';
 
 // --- MOCK DATA & CONSTANTS (yang TIDAK datang dari server) ---
 // Daftar ini dipakai sebagai fallback kalau getMasterData() belum selesai
@@ -625,13 +626,18 @@ const LocationPicker = ({ position, setPosition, setTempLokasi }) => {
   );
 };
 // 3. Profile Setup View
-const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggestions, onSave, onBack, showToast }) => {
+const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggestions, dosenList, onSave, onBack, showToast }) => {
   const [step, setStep] = useState(1);
   const [isSaving, setIsSaving] = useState(false);
 
   const fakultasOptions = masterData?.fakultas?.length ? masterData.fakultas : FAKULTAS_LIST_FALLBACK;
   const prodiOptions = masterData?.prodi?.length ? masterData.prodi.map(p => p.nama) : PRODI_LIST_FALLBACK;
   const programOptions = masterData?.jenisProgram?.length ? masterData.jenisProgram : PROGRAM_LIST_FALLBACK;
+  const dosenOptions = (dosenList || []).map(d => d['NAMA DOSEN']);
+  const dosenByNama = (dosenList || []).reduce((acc, d) => {
+    acc[d['NAMA DOSEN']] = d.NUPTK;
+    return acc;
+  }, {});
 
   // Saran datalist Nama Program & Nama Mitra (lihat ProgramSuggestions di
   // api.js). Tidak ada fallback hardcode di sini -- belum ada data hanya
@@ -665,6 +671,18 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
   const [tempLokasi, setTempLokasi] = useState('');
 
   const handleChange = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
+  // Saat nama dosen dipilih dari daftar dosen.json, NUPTK otomatis ikut
+  // terisi (dan field NUPTK jadi readonly -- lihat step 3). Kalau pengguna
+  // mengetik nama bebas yang TIDAK ada di dosenByNama (dosen tidak
+  // terdaftar di data), NUPTK dikosongkan supaya tidak salah pasang dengan
+  // NUPTK dosen lain, dan field NUPTK kembali bisa diisi manual.
+  const handleDplNamaChange = (namaTerpilih) => {
+    setFormData(prev => ({
+      ...prev,
+      dplNama: namaTerpilih,
+      dplNuptk: dosenByNama[namaTerpilih] || ''
+    }));
+  };
 
   const addMataKuliah = () => {
     if (newMk.kode && newMk.nama && newMk.sks) {
@@ -728,7 +746,9 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
   };
 
   const validateStep1 = () => formData.nama && String(formData.wa || '').startsWith('62') && formData.email && formData.prodi && formData.fakultas && formData.lokasi;
-  const validateStep3 = () => (!formData.dplWa || String(formData.dplWa || '').startsWith('62')) && (!formData.dplNuptk || String(formData.dplNuptk || '').length === 16);
+  const validateStep3 = () => 
+    (!formData.dplWa || String(formData.dplWa || '').startsWith('62')) && 
+    (!formData.dplNama || !!formData.dplNuptk);
 
   const openMapPicker = () => {
     if (formData.lokasi) {
@@ -944,8 +964,21 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
               <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-5 flex items-center gap-2">
                 <User className="w-5 h-5 text-emerald-500" /> Data DPL (Kampus)
               </h2>
-              <Input label="Nama Lengkap & Gelar" value={formData.dplNama} onChange={e => handleChange('dplNama', e.target.value)} />
-              <Input label="NUPTK" type="number" placeholder="16 Digit" value={formData.dplNuptk} onChange={e => handleChange('dplNuptk', e.target.value)} error={formData.dplNuptk && formData.dplNuptk.length !== 16 ? "Harus 16 digit" : ""} />
+              <SearchableSelect 
+                label="Nama Lengkap & Gelar" 
+                options={dosenOptions} 
+                value={formData.dplNama} 
+                onChange={handleDplNamaChange} 
+                placeholder="Cari nama dosen..." 
+              />
+              <Input 
+                label="NUPTK (Otomatis)" 
+                type="text" 
+                placeholder="Pilih nama dosen terlebih dahulu" 
+                value={formData.dplNuptk} 
+                disabled
+                error={formData.dplNama && !formData.dplNuptk ? "Dosen tidak ditemukan di data, hubungi admin" : ""}
+              />
               <Input label="WhatsApp (Awali 62)" type="tel" placeholder="628..." value={formData.dplWa} onChange={e => handleChange('dplWa', e.target.value)} />
               <Input label="Email Kampus" type="email" value={formData.dplEmail} onChange={e => handleChange('dplEmail', e.target.value)} />
             </div>
@@ -3524,6 +3557,7 @@ export default function App() {
             currentNim={user?.nim} 
             masterData={masterData}
             programSuggestions={programSuggestions}
+            dosenList={dosenData}
             onSave={handleSaveProfile} 
             onBack={profile ? () => setView('dashboard') : null} 
             showToast={showToast} 
