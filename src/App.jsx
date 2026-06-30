@@ -1573,11 +1573,25 @@ const DashboardView = ({ profile, logbooks, isLogbooksLoading, isLaporanLoading,
   );
 };
 // 4.5. Logbook Table View (Datatable)
-const LogbookTableView = ({ logbooks, onBack, profile }) => {
+const LogbookTableView = ({ logbooks, onBack, profile, onEditLogbook, onDeleteLogbook, showToast }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [entriesPerPage, setEntriesPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const [sortConfig, setSortConfig] = useState({ key: 'tanggal', direction: 'desc' });
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const handleConfirmDelete = async (id) => {
+    setDeletingId(id);
+    try {
+      await onDeleteLogbook(id);
+      showToast && showToast('Logbook berhasil dihapus.', 'success');
+    } catch (err) {
+      showToast && showToast(err.message || 'Gagal menghapus logbook.', 'error');
+    } finally {
+      setDeletingId(null);
+      setConfirmDeleteId(null);
+    }
+  };
 
   const formatPemetaan = (pemetaanMk) => {
     if (!pemetaanMk || pemetaanMk.length === 0) return '-';
@@ -1931,6 +1945,7 @@ const LogbookTableView = ({ logbooks, onBack, profile }) => {
                   <th className="p-3 text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wide cursor-pointer hover:bg-slate-100 dark:bg-slate-700" onClick={() => requestSort('status')}>
                     <div className="flex items-center gap-1">Status <ArrowUpDown className="w-3 h-3 text-slate-400 dark:text-slate-500" /></div>
                   </th>
+                  <th className="p-3 text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wide text-center print:hidden">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -1966,6 +1981,28 @@ const LogbookTableView = ({ logbooks, onBack, profile }) => {
                             'bg-amber-100 text-amber-700'}`}>
                           {lb.status}
                         </span>
+                      </td>
+                      <td className="p-3 whitespace-nowrap print:hidden">
+                        {lb.status !== 'Disetujui' ? (
+                          <div className="flex gap-1.5 justify-center">
+                            <button 
+                              onClick={() => onEditLogbook && onEditLogbook(lb)} 
+                              className="p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg transition-colors"
+                              title="Edit"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button 
+                              onClick={() => setConfirmDeleteId(lb.id)} 
+                              className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition-colors"
+                              title="Hapus"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-slate-300 dark:text-slate-600 italic block text-center">-</span>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -2003,9 +2040,34 @@ const LogbookTableView = ({ logbooks, onBack, profile }) => {
           )}
         </div>
       </div>
+
+      {confirmDeleteId && (
+        <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-6 print:hidden">
+          <div className="bg-white dark:bg-slate-800 rounded-[2rem] p-6 max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-200">
+            <p className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-4 text-center">Yakin hapus logbook ini?</p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setConfirmDeleteId(null)} 
+                disabled={deletingId === confirmDeleteId}
+                className="flex-1 px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-sm font-bold rounded-xl hover:bg-slate-200 dark:bg-slate-600 transition-colors disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button 
+                onClick={() => handleConfirmDelete(confirmDeleteId)} 
+                disabled={deletingId === confirmDeleteId}
+                className="flex-1 px-4 py-3 bg-rose-500 text-white text-sm font-bold rounded-xl shadow-sm hover:bg-rose-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-70"
+              >
+                {deletingId === confirmDeleteId ? <ButtonSpinner className="w-4 h-4" /> : null} Ya, Hapus
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+// 5. Logbook Form View (Langkah 2) - MULTIPLE IMAGES + SUBMIT ASYNC KE SERVER
 // 5. Logbook Form View (Langkah 2) - MULTIPLE IMAGES + SUBMIT ASYNC KE SERVER
 const LogbookFormView = ({ profile, onSave, onSaveLocalDraft, onDiscardLocalDraft, onBack, showToast, editingLogbook }) => {
   
@@ -3492,7 +3554,16 @@ export default function App() {
             onToggleTheme={toggleTheme}
           />
         )}
-        {view === 'logbookTable' && <LogbookTableView logbooks={logbooks} onBack={() => setView('dashboard')} profile={profile} />}
+        {view === 'logbookTable' && (
+          <LogbookTableView 
+            logbooks={logbooks} 
+            onBack={() => setView('dashboard')} 
+            profile={profile} 
+            onEditLogbook={(lb) => { setEditingLogbook(lb); setView('logbookForm'); }}
+            onDeleteLogbook={handleDeleteLogbook}
+            showToast={showToast}
+          />
+        )}
         {view === 'logbookForm' && (
           <LogbookFormView 
             key={editingLogbook ? (editingLogbook.id || editingLogbook.localDraftId) : 'new'} 
