@@ -67,23 +67,40 @@ const getWitaDateString = () => {
 const parseSafeDate = (dateString) => {
   if (!dateString) return new Date();
 
-  // 1. Pastikan nilainya berupa string
   const strDate = String(dateString);
 
-  // 2. Bersihkan embel-embel jam/timezone (misal: "2026-06-23T15:00:00.000Z" -> "2026-06-23")
+  // Kalau ini string ISO dengan informasi timezone (ada 'T' dan/atau 'Z'),
+  // geser dulu ke WITA (UTC+8) SEBELUM memotong bagian tanggalnya.
+  // Spreadsheet/GAS sering mengirim Date sebagai ISO UTC, misal
+  // "2026-06-22T16:00:00.000Z" yang sebenarnya = 23 Juni 2026 00:00 WITA.
+  // Tanpa pergeseran ini, split('T')[0] akan mengambil tanggal UTC (22),
+  // bukan tanggal WITA yang dimaksud (23) -> bug "mundur 1 hari".
+  if (strDate.includes('T') && (strDate.includes('Z') || /[+-]\d{2}:?\d{2}$/.test(strDate))) {
+    const utcDate = new Date(strDate);
+    if (!isNaN(utcDate.getTime())) {
+      const witaTime = new Date(utcDate.getTime() + (8 * 60 * 60 * 1000));
+      return new Date(
+        witaTime.getUTCFullYear(),
+        witaTime.getUTCMonth(),
+        witaTime.getUTCDate()
+      );
+    }
+  }
+
+  // 2. Bersihkan embel-embel jam/timezone untuk kasus string biasa
+  // (misal: "2026-06-23 00:00:00" tanpa Z, atau sudah berupa date-only)
   const justDate = strDate.split('T')[0].split(' ')[0];
 
   // 3. Jika formatnya YYYY-MM-DD
   if (justDate.includes('-')) {
     const [y, m, d] = justDate.split('-');
-    return new Date(y, m - 1, parseInt(d, 10)); // parseInt mencegah sisa karakter
+    return new Date(y, m - 1, parseInt(d, 10));
   }
 
   // 4. Jika format dari Spreadsheet berubah jadi DD/MM/YYYY
   if (justDate.includes('/')) {
     const parts = justDate.split('/');
     if (parts.length === 3) {
-      // Asumsi format Indonesia (DD/MM/YYYY)
       return new Date(parts[2], parts[1] - 1, parts[0]);
     }
   }
@@ -103,6 +120,21 @@ const formatDateForInput = (rawDate) => {
   const day = String(d.getDate()).padStart(2, '0');
   
   return `${y}-${m}-${day}`;
+};
+// Format tampilan tanggal ala Indonesia, contoh: "30 Juni 2026"
+const formatDateIndo = (rawDate) => {
+  if (!rawDate) return '-';
+  const d = parseSafeDate(rawDate);
+  if (isNaN(d.getTime())) return '-';
+  return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+};
+
+// Versi pendek untuk kartu/list yang sempit, contoh: "30 Jun 2026"
+const formatDateIndoShort = (rawDate) => {
+  if (!rawDate) return '-';
+  const d = parseSafeDate(rawDate);
+  if (isNaN(d.getTime())) return '-';
+  return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 };
 // Drive seringkali memblokir tag <img> langsung (CORS/X-Frame-Options).
 // Konversi ke endpoint lh3.googleusercontent.com yang lebih permisif untuk
@@ -1381,7 +1413,7 @@ const DashboardView = ({ profile, logbooks, isLogbooksLoading, isLaporanLoading,
                       {draft.kegiatan?.length ? draft.kegiatan.join(', ') : 'Logbook belum diberi judul'}
                     </p>
                     <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wide mt-0.5">
-                      {draft.tanggal} • Tersimpan di perangkat ini saja
+                      {formatDateIndoShort(draft.tanggal)} • Tersimpan di perangkat ini saja
                     </p>
                   </div>
                   <button 
@@ -1631,7 +1663,7 @@ const LogbookTableView = ({ logbooks, onBack, profile }) => {
 
     const headers = ['Tanggal', 'Kegiatan', 'Durasi (Jam)', 'Deskripsi', 'Dokumentasi', 'Pemetaan Matkul', 'Status', 'Paraf Mentor'];
     const rows = filteredData.map(lb => [
-      lb.tanggal,
+      formatDateIndoShort(lb.tanggal),
       `"${lb.kegiatan.join(', ')}"`,
       lb.durasi,
       `"${lb.deskripsi.replace(/"/g, '""')}"`,
@@ -1731,12 +1763,13 @@ const LogbookTableView = ({ logbooks, onBack, profile }) => {
     filteredData.forEach(lb => {
        let imagesHtml = '-';
        if (lb.foto && lb.foto.length > 0) {
-         imagesHtml = `<div class="doc-images">${lb.foto.map(img => `<img src="${img}" />`).join('')}</div>`;
+        
+         imagesHtml = `<div class="doc-images">${lb.foto.map(img => `<img src="${getSafeImageUrl(img)}" />`).join('')}</div>`;
        }
 
        tableHtml += `
        <tr>
-          <td style="text-align: center;">${lb.tanggal}</td>
+          <td style="text-align: center;">${formatDateIndoShort(lb.tanggal)}</td>
           <td>${lb.kegiatan.join(', ')}</td>
           <td style="text-align: center;">${lb.durasi} Jam</td>
           <td>${lb.deskripsi}</td>
@@ -1810,10 +1843,19 @@ const LogbookTableView = ({ logbooks, onBack, profile }) => {
     printWindow.document.write('</body></html>');
     printWindow.document.close();
     printWindow.focus();
-    
-    setTimeout(() => {
+
+    const imgs = printWindow.document.images;
+    const imgPromises = Array.from(imgs).map(img => {
+      if (img.complete) return Promise.resolve();
+      return new Promise(resolve => {
+        img.onload = resolve;
+        img.onerror = resolve;
+      });
+    });
+
+    Promise.all(imgPromises).then(() => {
       printWindow.print();
-    }, 1000); 
+    });
   };
 
   return (
@@ -1895,7 +1937,7 @@ const LogbookTableView = ({ logbooks, onBack, profile }) => {
                 {currentEntries.length > 0 ? (
                   currentEntries.map(lb => (
                     <tr key={lb.id} className="hover:bg-slate-50 dark:bg-slate-900 transition-colors">
-                      <td className="p-3 text-sm font-semibold text-slate-800 dark:text-slate-100 whitespace-nowrap">{lb.tanggal}</td>
+                      <td className="p-3 text-sm font-semibold text-slate-800 dark:text-slate-100 whitespace-nowrap">{formatDateIndoShort(lb.tanggal)}</td>
                       <td className="p-3 text-sm font-semibold text-slate-700 dark:text-slate-200 min-w-[120px]">{lb.kegiatan.join(', ')}</td>
                       <td className="p-3 text-sm font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">{lb.durasi} Jam</td>
                       <td className="p-3 text-xs text-slate-500 dark:text-slate-400 min-w-[200px]">{lb.deskripsi}</td>
@@ -2387,7 +2429,7 @@ const LaporanAkhirView = ({ laporanData, onSave, onBack, showToast, onDelete }) 
                   ) : (
                     <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{formData.fileName}</p>
                   )}
-                  <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase mt-0.5">{formData.tanggal}</p>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase mt-0.5">{formatDateIndo(formData.tanggal)}</p>
                 </div>
               </div>
 
@@ -2726,7 +2768,7 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
                         'bg-amber-100 text-amber-700'}`}>
                       {lap.status}
                     </span>
-                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{lap.tanggal}</span>
+                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{formatDateIndoShort(lap.tanggal)}</span>
                   </div>
                   <div className="flex items-center gap-3 bg-white dark:bg-slate-800 p-3 rounded-xl border border-emerald-50 mb-3">
                     <FileText className="w-6 h-6 text-emerald-500 shrink-0" />
@@ -2769,7 +2811,7 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
                         'bg-amber-100 text-amber-700'}`}>
                       {log.status}
                     </span>
-                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{log.tanggal} • {log.durasi} Jam</span>
+                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{formatDateIndoShort(log.tanggal)} • {log.durasi} Jam</span>
                   </div>
                   <p className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-1">{log.kegiatan.join(', ')}</p>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mb-2 leading-relaxed">{log.deskripsi}</p>
@@ -2916,7 +2958,7 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-xs font-bold text-slate-800 dark:text-slate-100">{lap.tanggal}</p>
+                            <p className="text-xs font-bold text-slate-800 dark:text-slate-100">{formatDateIndoShort(lap.tanggal)}</p>
                             <span className="text-[9px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-md mt-1 inline-block">Pending</span>
                           </div>
                         </div>
@@ -2967,7 +3009,7 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-xs font-bold text-slate-800 dark:text-slate-100">{log.tanggal}</p>
+                            <p className="text-xs font-bold text-slate-800 dark:text-slate-100">{formatDateIndoShort(log.tanggal)}</p>
                             <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-0.5">{log.durasi} Jam</p>
                           </div>
                         </div>
