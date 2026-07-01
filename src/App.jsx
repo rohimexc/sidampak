@@ -154,6 +154,18 @@ const getSafeImageUrl = (url) => {
   return url;
 };
 
+// Helper warna badge status logbook/laporan, dipakai di DashboardView,
+// LogbookTableView, dan ReviewerView supaya konsisten di satu tempat.
+const getStatusBadgeClass = (status) => {
+  if (status === 'Disetujui')               return 'bg-emerald-100 text-emerald-700';
+  if (status === 'Draf')                    return 'bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200';
+  if (status === 'Revisi Mentor')           return 'bg-rose-100 text-rose-700';
+  if (status === 'Revisi DPL')              return 'bg-orange-100 text-orange-700';
+  if (status === 'Menunggu Persetujuan Mentor') return 'bg-amber-100 text-amber-700';
+  if (status === 'Menunggu Persetujuan DPL')    return 'bg-indigo-100 text-indigo-700';
+  return 'bg-slate-100 text-slate-500';
+};
+
 // --- COMPONENTS ---
 
 // 1. Reusable UI Components
@@ -1529,11 +1541,7 @@ const DashboardView = ({ profile, logbooks, isLogbooksLoading, isLaporanLoading,
                   <h3 className="font-bold text-slate-800 dark:text-slate-100 truncate mb-1">{lb.kegiatan.join(', ')}</h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 mb-2 font-medium">{lb.deskripsi}</p>
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className={`text-[9px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wider
-                      ${lb.status === 'Disetujui' ? 'bg-emerald-100 text-emerald-700' : 
-                        lb.status === 'Draf' ? 'bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200' : 
-                        lb.status.includes('Revisi') ? 'bg-rose-100 text-rose-700' : 
-                        'bg-amber-100 text-amber-700'}`}>
+                    <span className={`text-[9px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wider ${getStatusBadgeClass(lb.status)}`}>
                       {lb.status}
                     </span>
                     <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 flex items-center gap-1 bg-slate-50 dark:bg-slate-900 px-2.5 py-1 rounded-md">
@@ -2007,11 +2015,7 @@ const LogbookTableView = ({ logbooks, onBack, profile, onEditLogbook, onDeleteLo
                       </td>
 
                       <td className="p-3 whitespace-nowrap">
-                        <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase tracking-wider
-                          ${lb.status === 'Disetujui' ? 'bg-emerald-100 text-emerald-700' : 
-                            lb.status === 'Draf' ? 'bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200' : 
-                            lb.status.includes('Revisi') ? 'bg-rose-100 text-rose-700' : 
-                            'bg-amber-100 text-amber-700'}`}>
+                        <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase tracking-wider ${getStatusBadgeClass(lb.status)}`}>
                           {lb.status}
                         </span>
                       </td>
@@ -2897,10 +2901,7 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
               {mhsLogs.map(log => (
                 <div key={log.id} className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 hover:border-indigo-100 transition-colors">
                   <div className="flex justify-between items-start mb-2">
-                    <span className={`text-[9px] px-2 py-1 rounded-md font-bold uppercase tracking-wider
-                      ${log.status === 'Disetujui' ? 'bg-emerald-100 text-emerald-700' : 
-                        log.status.includes('Revisi') ? 'bg-rose-100 text-rose-700' : 
-                        'bg-amber-100 text-amber-700'}`}>
+                    <span className={`text-[9px] px-2 py-1 rounded-md font-bold uppercase tracking-wider ${getStatusBadgeClass(log.status)}`}>
                       {log.status}
                     </span>
                     <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{formatDateIndoShort(log.tanggal)} • {log.durasi} Jam</span>
