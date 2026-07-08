@@ -237,15 +237,18 @@ const Input = ({ label, type = "text", error, disabled, icon: Icon, ...props }) 
 );
 
 const SearchableSelect = ({ label, options, value, onChange, placeholder, onAddCustom, clearOnSelect }) => {
+  // 1. Berikan fallback string kosong saat inisialisasi awal
   const [searchTerm, setSearchTerm] = useState(value || '');
   const [isOpen, setIsOpen] = useState(false);
   const wrapperRef = useRef(null);
 
   useEffect(() => {
-    if (value !== undefined && value !== searchTerm && !isOpen) {
-      setSearchTerm(value);
+    // 2. Pastikan value tidak null saat di-set ke state
+    const safeValue = value || '';
+    if (value !== undefined && safeValue !== searchTerm && !isOpen) {
+      setSearchTerm(safeValue);
     }
-  }, [value]);
+  }, [value, searchTerm, isOpen]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -255,23 +258,25 @@ const SearchableSelect = ({ label, options, value, onChange, placeholder, onAddC
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const filteredOptions = options.filter(opt => opt.toLowerCase().includes(searchTerm.toLowerCase()));
-  const isExactMatch = options.some(opt => opt.toLowerCase() === searchTerm.toLowerCase());
+  // 3. Pastikan searchTerm aman (selalu string) sebelum difilter
+  const safeSearchTerm = searchTerm || '';
+  const filteredOptions = options.filter(opt => opt && opt.toLowerCase().includes(safeSearchTerm.toLowerCase()));
+  const isExactMatch = options.some(opt => opt && opt.toLowerCase() === safeSearchTerm.toLowerCase());
 
   const handleSelect = (opt) => {
     onChange(opt);
     if (clearOnSelect) {
       setSearchTerm('');
     } else {
-      setSearchTerm(opt);
+      setSearchTerm(opt || '');
     }
     setIsOpen(false);
   };
 
   const handleAddCustom = () => {
-    if (searchTerm.trim() && onAddCustom) {
-      onAddCustom(searchTerm.trim());
-      onChange(searchTerm.trim());
+    if (safeSearchTerm.trim() && onAddCustom) {
+      onAddCustom(safeSearchTerm.trim());
+      onChange(safeSearchTerm.trim());
       if (clearOnSelect) setSearchTerm('');
       setIsOpen(false);
     }
@@ -280,7 +285,7 @@ const SearchableSelect = ({ label, options, value, onChange, placeholder, onAddC
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
       e.preventDefault(); 
-      if (searchTerm.trim() && !isExactMatch && onAddCustom) {
+      if (safeSearchTerm.trim() && !isExactMatch && onAddCustom) {
         handleAddCustom();
       } else if (filteredOptions.length > 0) {
         handleSelect(filteredOptions[0]);
@@ -296,7 +301,7 @@ const SearchableSelect = ({ label, options, value, onChange, placeholder, onAddC
           type="text"
           className="w-full p-3.5 pl-4 pr-10 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-2xl shadow-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-800 transition-all outline-none"
           placeholder={placeholder}
-          value={searchTerm}
+          value={searchTerm || ''} // 4. Mencegah error React Warning "value should not be null"
           onChange={(e) => {
             setSearchTerm(e.target.value);
             setIsOpen(true);
@@ -322,13 +327,13 @@ const SearchableSelect = ({ label, options, value, onChange, placeholder, onAddC
             <div className="px-4 py-3 text-sm text-slate-400 dark:text-slate-500 text-center italic">Tidak ada di referensi.</div>
           )}
           
-          {searchTerm.trim() && !isExactMatch && onAddCustom && (
+          {safeSearchTerm.trim() && !isExactMatch && onAddCustom && (
             <button 
               type="button"
               className="w-full p-3 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors flex justify-center items-center gap-2 border-t border-indigo-100 dark:border-indigo-800/50"
               onClick={handleAddCustom}
             >
-              <Plus className="w-4 h-4"/> Input "{searchTerm}" (Enter)
+              <Plus className="w-4 h-4"/> Input "{safeSearchTerm}" (Enter)
             </button>
           )}
         </div>
@@ -645,9 +650,12 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
   const fakultasOptions = masterData?.fakultas?.length ? masterData.fakultas : FAKULTAS_LIST_FALLBACK;
   const prodiOptions = masterData?.prodi?.length ? masterData.prodi.map(p => p.nama) : PRODI_LIST_FALLBACK;
   const programOptions = masterData?.jenisProgram?.length ? masterData.jenisProgram : PROGRAM_LIST_FALLBACK;
-  const dosenOptions = (dosenList || []).map(d => d['NAMA DOSEN']);
+  const dosenOptions = (dosenList || [])
+  .map(d => d['NAMA DOSEN'])
+  .filter(Boolean); // buang null/undefined/''
+
   const dosenByNama = (dosenList || []).reduce((acc, d) => {
-    acc[d['NAMA DOSEN']] = d.NUPTK;
+    if (d['NAMA DOSEN']) acc[d['NAMA DOSEN']] = d.NUPTK || '';
     return acc;
   }, {});
 
@@ -663,7 +671,14 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
   const [formData, setFormData] = useState(() => {
     const defaultDokumen = { kerjasama: '', rps: '', krs: '', suratTugas: '', skDpl: '' };
     if (userProfile) {
-      return { ...userProfile, dokumen: userProfile.dokumen || defaultDokumen };
+      return { 
+        ...userProfile, 
+        dokumen: userProfile.dokumen || defaultDokumen,
+        // tambahkan fallback untuk field yang bisa null dari server:
+        dplNuptk: userProfile.dplNuptk || '',
+        dplNama: userProfile.dplNama || '',
+        lokasi: userProfile.lokasi || '',
+      };
     }
     return {
       nim: currentNim || '', nama: '', wa: '62', email: '', prodi: '', fakultas: '', jenisProgram: '', 
@@ -691,7 +706,7 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
   const handleDplNamaChange = (namaTerpilih) => {
     setFormData(prev => ({
       ...prev,
-      dplNama: namaTerpilih,
+      dplNama: namaTerpilih || '',
       dplNuptk: dosenByNama[namaTerpilih] || ''
     }));
   };
@@ -1685,11 +1700,12 @@ const LogbookTableView = ({ logbooks, onBack, profile, onEditLogbook, onDeleteLo
   }, [logbooks, sortConfig]);
 
   const filteredData = useMemo(() => {
-    return sortedData.filter(log => 
-      log.deskripsi.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.kegiatan.join(', ').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.status.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+  const term = (searchTerm || '').toLowerCase();
+  return sortedData.filter(log => 
+    (log.deskripsi || '').toLowerCase().includes(term) ||
+    (log.kegiatan || []).join(', ').toLowerCase().includes(term) ||
+    (log.status || '').toLowerCase().includes(term)
+  );
   }, [sortedData, searchTerm]);
 
   const indexOfLastEntry = currentPage * entriesPerPage;
@@ -3301,28 +3317,32 @@ export default function App() {
   const loadUserData = async (nim) => {
     let gotProfileCacheHit = false;
 
+    // Fungsi helper untuk mengecek apakah profil sudah lengkap (Detail Penugasan)
+    const checkIsProfileComplete = (prof) => {
+      return prof && prof.nama && prof.email && prof.prodi && prof.fakultas && prof.lokasi;
+    };
+
     // ---------------------------------------------------------------
-    // PROFIL -- ini satu-satunya yang menentukan kapan dashboard boleh
-    // dirender (karena DashboardView butuh `profile`). Begitu profil siap
-    // (dari cache ATAU dari server, mana pun lebih dulu), langsung pindah
-    // ke 'dashboard'. TIDAK menunggu logbook/laporan sama sekali.
+    // PROFIL -- menentukan kapan dashboard/setup boleh dirender.
     // ---------------------------------------------------------------
     const profilePromise = api.getProfile(nim, {
       onCacheHit: (cached) => {
         if (!cached) return;
         gotProfileCacheHit = true;
         setProfile(cached);
-        setView('dashboard'); // langsung tampil, tidak menunggu network
+        
+        // CEK KELENGKAPAN PROFIL DARI CACHE
+        if (checkIsProfileComplete(cached)) {
+          setView('dashboard');
+        } else {
+          showToast('Silakan lengkapi Detail Penugasan Anda terlebih dahulu.', 'error');
+          setView('setup');
+        }
       },
     });
 
     // ---------------------------------------------------------------
-    // LOGBOOK & LAPORAN -- berjalan independen dari profil. Masing-masing
-    // punya status loading sendiri (isLogbooksLoading/isLaporanLoading)
-    // supaya DashboardView bisa menampilkan skeleton kecil khusus di
-    // section itu saja, tanpa menahan tampilan profil/dashboard secara
-    // keseluruhan. Cache hit langsung tampil; fetch fresh tetap jalan di
-    // belakang dan menimpa begitu selesai.
+    // LOGBOOK & LAPORAN -- berjalan independen
     // ---------------------------------------------------------------
     let gotLogbookCacheHit = false;
     setIsLogbooksLoading(true);
@@ -3338,8 +3358,6 @@ export default function App() {
         if (gotLogbookCacheHit) {
           showToast('Gagal memperbarui logbook terbaru. Menampilkan data tersimpan.', 'error');
         }
-        // Cache miss + gagal: biarkan logbooks tetap [] (state awal),
-        // dashboard tetap tampil normal tanpa blocking.
       })
       .finally(() => setIsLogbooksLoading(false));
 
@@ -3360,10 +3378,6 @@ export default function App() {
       })
       .finally(() => setIsLaporanLoading(false));
 
-    // Beri microtask sekejap untuk onCacheHit profil sempat berjalan
-    // sebelum kita putuskan apakah perlu menampilkan spinner full-page.
-    // Spinner ini HANYA untuk kasus belum ada apa pun untuk ditampilkan
-    // (login pertama kali di perangkat ini, profil belum pernah di-cache).
     await Promise.resolve();
     if (!gotProfileCacheHit) {
       setIsLoadingDashboardData(true);
@@ -3374,7 +3388,7 @@ export default function App() {
       const profileData = await profilePromise;
 
       if (!profileData) {
-        // Belum pernah isi profil -> arahkan ke setup
+        // Belum pernah isi profil sama sekali -> arahkan ke setup
         setProfile(null);
         setLogbooks([]);
         setLaporanAkhir(null);
@@ -3382,17 +3396,17 @@ export default function App() {
         return;
       }
 
-      // Update final dengan profil fresh -- menimpa apa pun yang sempat
-      // tampil dari cache, memastikan kebenaran selalu menang. Logbook &
-      // laporan TIDAK ditunggu di sini -- mereka menyusul sendiri lewat
-      // promise terpisah di atas begitu masing-masing selesai.
       setProfile(profileData);
-      setView('dashboard');
+
+      // CEK KELENGKAPAN PROFIL DARI SERVER SEGAR
+      if (checkIsProfileComplete(profileData)) {
+        setView('dashboard');
+      } else {
+        showToast('Silakan lengkapi Detail Penugasan Anda terlebih dahulu.', 'error');
+        setView('setup');
+      }
     } catch (err) {
       if (gotProfileCacheHit) {
-        // Sudah terlanjur menampilkan profil dari cache -- biarkan
-        // pengguna tetap melihatnya, cukup beri tahu lewat toast bahwa
-        // pembaruan terbaru gagal dimuat, tanpa melempar balik ke login.
         showToast('Gagal memperbarui profil terbaru. Menampilkan data tersimpan.', 'error');
       } else {
         showToast(err.message || 'Gagal memuat data dari server.', 'error');
@@ -3560,7 +3574,8 @@ export default function App() {
             programSuggestions={programSuggestions}
             dosenList={dosenData}
             onSave={handleSaveProfile} 
-            onBack={profile ? () => setView('dashboard') : null} 
+            // Tombol "Kembali" hanya muncul kalau profil SUDAH benar-benar lengkap
+            onBack={(profile && profile.nama && profile.email && profile.prodi && profile.fakultas && profile.lokasi) ? () => setView('dashboard') : null} 
             showToast={showToast} 
           />
         )}
