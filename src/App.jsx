@@ -4,8 +4,7 @@ import {
   CheckCircle, AlertCircle, Plus, ChevronLeft, LogOut, 
   Search, Calendar, Send, Info, Bell, X, ChevronRight,
   TrendingUp, Activity, Pencil, Trash2, Download, Printer, ArrowUpDown, Filter, Loader2,
-  Sun, Moon,
-  PhoneCallIcon
+  Sun, Moon, Home, PhoneCallIcon
 } from 'lucide-react';
 import { FaWhatsapp } from 'react-icons/fa';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
@@ -1319,39 +1318,60 @@ const DashboardView = ({ profile, logbooks, isLogbooksLoading, isLaporanLoading,
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {/* Theme Toggle */}
             <ThemeToggle 
               mode={themeMode} 
               onToggle={onToggleTheme} 
-              className="bg-white/10 text-white hover:bg-white/20 backdrop-blur-md border border-white/20"
+              className="w-12 h-12 bg-white/10 dark:bg-slate-700/50 text-white dark:text-slate-200 hover:bg-white/20 dark:hover:bg-slate-700 backdrop-blur-md border border-white/20 dark:border-slate-600 rounded-2xl flex items-center justify-center transition-all"
             />
-            <button onClick={onEditProfile} className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center backdrop-blur-md border border-white/20 hover:bg-white/20 transition-all cursor-pointer">
-              <User className="w-6 h-6 text-white" />
+
+            {/* Tombol Profil */}
+            <button 
+              onClick={onEditProfile} 
+              title="Profil Saya" 
+              className="w-12 h-12 bg-white/10 dark:bg-slate-700/50 text-white dark:text-slate-200 hover:bg-white/20 dark:hover:bg-slate-700 backdrop-blur-md border border-white/20 dark:border-slate-600 rounded-2xl flex items-center justify-center transition-all cursor-pointer"
+            >
+              <User className="w-6 h-6" />
+            </button>
+
+            {/* Tombol Keluar */}
+            <button 
+              onClick={onLogout} 
+              title="Keluar" 
+              className="w-12 h-12 bg-rose-500/80 hover:bg-rose-600 text-white backdrop-blur-md border border-rose-500/30 rounded-2xl flex items-center justify-center transition-all cursor-pointer"
+            >
+              <LogOut className="w-6 h-6" />
             </button>
           </div>
         </div>
       </div>
 
       <div className="px-6 -mt-16 relative z-20 mb-6">
-        <div className="bg-white dark:bg-slate-800 rounded-[2rem] p-6 shadow-xl shadow-indigo-900/5 border border-slate-100 dark:border-slate-700 flex justify-between items-center">
+        <div 
+          onClick={onViewAllLogs}
+          role="button"
+          tabIndex={0}
+          className="bg-white dark:bg-slate-800 rounded-[2rem] p-6 shadow-xl shadow-indigo-900/5 border border-slate-100 dark:border-slate-700 flex justify-between items-center cursor-pointer hover:shadow-2xl hover:shadow-indigo-500/10 hover:-translate-y-1 active:scale-95 transition-all duration-300 group"
+        >
           <div className="text-center flex-1">
-            <div className="w-10 h-10 mx-auto bg-indigo-50 rounded-full flex items-center justify-center mb-2">
-              <FileText className="w-5 h-5 text-indigo-600" />
+            <div className="w-10 h-10 mx-auto bg-indigo-50 dark:bg-indigo-500/20 rounded-full flex items-center justify-center mb-2 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-500/30 transition-colors">
+              <FileText className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
             </div>
             <p className="text-2xl font-black text-slate-800 dark:text-slate-100">{logbooks.filter(lb => lb.status === 'Disetujui').length}</p>
             <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mt-1">Disetujui</p>
           </div>
           <div className="w-px h-16 bg-slate-100 dark:bg-slate-700 mx-2"></div>
           <div className="text-center flex-1">
-            <div className="w-10 h-10 mx-auto bg-emerald-50 rounded-full flex items-center justify-center mb-2">
-              <Clock className="w-5 h-5 text-emerald-600" />
+            <div className="w-10 h-10 mx-auto bg-emerald-50 dark:bg-emerald-500/20 rounded-full flex items-center justify-center mb-2 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-500/30 transition-colors">
+              <Clock className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
             </div>
             <p className="text-2xl font-black text-slate-800 dark:text-slate-100">{totalJam}</p>
             <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mt-1">Tercatat</p>
           </div>
           <div className="w-px h-16 bg-slate-100 dark:bg-slate-700 mx-2"></div>
           <div className="text-center flex-1">
-            <div className="w-10 h-10 mx-auto bg-amber-50 rounded-full flex items-center justify-center mb-2">
-              <Activity className="w-5 h-5 text-amber-600" />
+            <div className="w-10 h-10 mx-auto bg-amber-50 dark:bg-amber-500/20 rounded-full flex items-center justify-center mb-2 group-hover:bg-amber-100 dark:group-hover:bg-amber-500/30 transition-colors">
+              <Activity className="w-5 h-5 text-amber-600 dark:text-amber-400" />
             </div>
             <p className="text-xl font-black text-slate-800 dark:text-slate-100">
               {logbooks.length}
@@ -1595,35 +1615,59 @@ const DashboardView = ({ profile, logbooks, isLogbooksLoading, isLaporanLoading,
             </div>
           ))}
           {!isLogbooksLoading && logbooks.length === 0 && (
-            <div className="text-center p-10 bg-white dark:bg-slate-800 rounded-[2rem] border-2 border-dashed border-slate-200 dark:border-slate-600">
-              <FileText className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-              <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">Belum ada aktivitas.</p>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Tap tombol + untuk mengisi logbook.</p>
+            <div className="text-center p-8 sm:p-10 bg-white dark:bg-slate-800 rounded-[2rem] border-2 border-dashed border-slate-200 dark:border-slate-600 flex flex-col items-center">
+              <div className="w-20 h-20 bg-indigo-50 dark:bg-indigo-900/20 rounded-full flex items-center justify-center mb-4">
+                <FileText className="w-10 h-10 text-indigo-400 dark:text-indigo-500" />
+              </div>
+              <p className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-1">Belum ada aktivitas.</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-6 text-center max-w-[250px] leading-relaxed">
+                Mulai catat kegiatanmu agar mempermudah dalam proses rekognisi.
+              </p>
+              <button 
+                onClick={onNewLogbook}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3.5 rounded-2xl text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 transition-all active:scale-95 w-full sm:w-auto"
+              >
+                <Plus className="w-5 h-5" /> Tulis Logbook Pertamamu
+              </button>
             </div>
           )}
         </div>
       </div>
 
-      <div className="absolute bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-slate-100 dark:border-slate-700 px-8 md:px-16 lg:px-24 py-3 flex justify-between items-center z-10 safe-area-bottom shadow-[0_-15px_30px_-15px_rgba(0,0,0,0.05)] print:hidden">
-        <button onClick={onLogout} className="flex flex-col items-center gap-1.5 text-slate-400 dark:text-slate-500 hover:text-rose-500 transition-colors">
-          <LogOut className="w-5 h-5" />
-          <span className="text-[10px] font-bold uppercase tracking-wider">Keluar</span>
+      {/* BOTTOM NAVIGATION BAR */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl border-t border-slate-100 dark:border-slate-700 px-8 md:px-16 lg:px-24 py-3 flex justify-between items-center z-50 safe-area-bottom shadow-[0_-15px_30px_-15px_rgba(0,0,0,0.05)] print:hidden">
+        
+        {/* Tombol Beranda */}
+        <button 
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} 
+          className="flex flex-col items-center gap-1.5 text-indigo-600 dark:text-indigo-400 transition-colors"
+        >
+          <Home className="w-5 h-5" />
+          <span className="text-[10px] font-bold uppercase tracking-wider">Beranda</span>
         </button>
 
+        {/* Tombol FAB + Logbook */}
         <div className="relative -top-8">
             <button 
               onClick={onNewLogbook}
-              className="w-16 h-16 bg-slate-900 text-white rounded-[2rem] shadow-xl shadow-slate-900/30 flex items-center justify-center hover:bg-slate-800 hover:scale-105 active:scale-95 transition-all ring-4 ring-slate-50"
+              className="w-16 h-16 bg-slate-900 dark:bg-indigo-600 text-white rounded-[2rem] shadow-xl shadow-slate-900/30 dark:shadow-indigo-900/40 flex items-center justify-center hover:bg-slate-800 dark:hover:bg-indigo-500 hover:scale-105 active:scale-95 transition-all ring-4 ring-slate-50 dark:ring-slate-900"
             >
               <Plus className="w-8 h-8" />
             </button>
-            <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest whitespace-nowrap">Logbook</span>
+            <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest whitespace-nowrap">
+              Logbook
+            </span>
         </div>
 
-        <button onClick={onViewLaporan} className="flex flex-col items-center gap-1.5 text-slate-400 dark:text-slate-500 hover:text-indigo-600 transition-colors">
+        {/* Tombol Laporan */}
+        <button 
+          onClick={onViewLaporan} 
+          className="flex flex-col items-center gap-1.5 text-slate-400 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+        >
           <FileText className="w-5 h-5" />
           <span className="text-[10px] font-bold uppercase tracking-wider">Laporan</span>
         </button>
+        
       </div>
     </div>
   );
@@ -2120,6 +2164,7 @@ const LogbookTableView = ({ logbooks, onBack, profile, onEditLogbook, onDeleteLo
 };
 // 5. Logbook Form View (Langkah 2) - MULTIPLE IMAGES + SUBMIT ASYNC KE SERVER
 // 5. Logbook Form View (Langkah 2) - MULTIPLE IMAGES + SUBMIT ASYNC KE SERVER
+// 5. Logbook Form View (Langkah 2) - MULTIPLE IMAGES + SUBMIT ASYNC KE SERVER
 const LogbookFormView = ({ profile, onSave, onSaveLocalDraft, onDiscardLocalDraft, onBack, showToast, editingLogbook }) => {
   
   const initialFoto = editingLogbook 
@@ -2140,12 +2185,61 @@ const LogbookFormView = ({ profile, onSave, onSaveLocalDraft, onDiscardLocalDraf
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isEditMode = !!editingLogbook;
-  // Logbook yang sedang diedit dianggap "sudah ada di server" hanya kalau
-  // ia punya id asli DAN bukan draf lokal (draf lokal ditandai isLocalDraft).
-  // Logbook baru, atau draf lokal yang sedang dilanjutkan, keduanya BUKAN
-  // logbook server -- "Simpan Draf" untuk keduanya cukup disimpan lokal.
   const isServerLogbook = isEditMode && !editingLogbook.isLocalDraft;
   const isBusy = isSavingDraft || isSubmitting;
+
+  // --- STATE BARU UNTUK AUTO-SAVE & DIRTY CHECK ---
+  const initialDataRef = useRef(JSON.stringify(formData));
+  const [lastSavedData, setLastSavedData] = useState(initialDataRef.current);
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
+
+  // AUTO-SAVE LOGIC (Debounce 1 Detik)
+  useEffect(() => {
+    const currentDataString = JSON.stringify(formData);
+    
+    // Jangan jalankan jika data belum berubah, sedang submit, atau ini adalah logbook server
+    if (currentDataString === lastSavedData || isSubmitting || isServerLogbook) return;
+
+    const timer = setTimeout(async () => {
+      setIsAutoSaving(true);
+      try {
+        // Buat ID draf jika belum ada
+        const draftId = formData.localDraftId || editingLogbook?.localDraftId || generateId();
+        
+        if (!formData.localDraftId) {
+          setFormData(prev => ({ ...prev, localDraftId: draftId }));
+        }
+
+        const draftData = {
+          ...formData,
+          status: 'Draf',
+          localDraftId: draftId
+        };
+
+        // Simpan ke local storage di latar belakang (tanpa navigasi)
+        await localDrafts.save(profile.nim, draftData);
+        setLastSavedData(currentDataString);
+      } catch (err) {
+        console.error('Auto-save gagal:', err);
+      } finally {
+        setIsAutoSaving(false);
+      }
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [formData, lastSavedData, isSubmitting, isServerLogbook, profile.nim, editingLogbook]);
+
+  // PROMPT KELUAR
+  const handleBack = () => {
+    const isDirty = JSON.stringify(formData) !== initialDataRef.current;
+    if (isDirty && !isSubmitting && !isSavingDraft) {
+      if (window.confirm("Ada perubahan yang belum disimpan. Yakin ingin keluar?")) {
+        onBack();
+      }
+    } else {
+      onBack();
+    }
+  };
 
   useEffect(() => {
     let targetStatus = formData.status === 'Draf' ? 'Menunggu Persetujuan Mentor' : formData.status;
@@ -2181,8 +2275,6 @@ const LogbookFormView = ({ profile, onSave, onSaveLocalDraft, onDiscardLocalDraf
     });
   };
 
-  // MULTIPLE IMAGES HANDLER — tetap base64 di state lokal untuk preview;
-  // upload sebenarnya ke Drive terjadi di server saat onSave dipanggil.
   const handleImageCapture = (e) => {
     const files = Array.from(e.target.files);
     
@@ -2218,8 +2310,6 @@ const LogbookFormView = ({ profile, onSave, onSaveLocalDraft, onDiscardLocalDraf
   const finalSubmitStatus = profile?.mentorNama ? 'Menunggu Persetujuan Mentor' : 'Menunggu Persetujuan DPL';
 
   const handleSaveDraft = async () => {
-    // Logbook yang SUDAH ada di server (sedang diedit, mis. status
-    // "Revisi Mentor") tetap memakai jalur lama: update langsung ke server.
     if (isServerLogbook) {
       setIsSavingDraft(true);
       try {
@@ -2233,19 +2323,12 @@ const LogbookFormView = ({ profile, onSave, onSaveLocalDraft, onDiscardLocalDraf
       return;
     }
 
-    // Logbook baru (atau draf lokal yang sedang dilanjutkan) -- simpan
-    // HANYA ke localStorage, tidak ada panggilan API/upload Drive sama
-    // sekali. Foto dikompresi otomatis di dalam onSaveLocalDraft sebelum
-    // disimpan. di-`await` supaya toast sukses HANYA muncul setelah
-    // penyimpanan benar-benar tuntas (sebelumnya ini tidak di-await,
-    // sehingga toast "berhasil" bisa muncul walau penyimpanan gagal/belum
-    // selesai -- itulah sumber bug "kadang cuma 1 foto yang tersimpan").
     setIsSavingDraft(true);
     try {
       await onSaveLocalDraft({
         ...formData,
         status: 'Draf',
-        localDraftId: editingLogbook?.localDraftId, // ada kalau melanjutkan draf lokal yang sudah ada
+        localDraftId: formData.localDraftId || editingLogbook?.localDraftId, 
       });
       showToast('Disimpan sebagai draf di perangkat ini.', 'success');
     } catch (err) {
@@ -2259,17 +2342,11 @@ const LogbookFormView = ({ profile, onSave, onSaveLocalDraft, onDiscardLocalDraf
     if (!canSave) return;
     setIsSubmitting(true);
     try {
-      // id final logbook: pakai id server kalau sudah ada (edit logbook
-      // server), atau generate baru kalau ini logbook baru/berasal dari
-      // draf lokal (draf lokal tidak punya id server, hanya localDraftId).
       const finalId = isServerLogbook ? formData.id : generateId();
       await onSave({ ...formData, status: finalSubmitStatus, id: finalId, catatanRevisi: '' });
 
-      // Submit berhasil -> kalau ini berasal dari draf lokal, hapus draf
-      // lokalnya supaya tidak muncul dobel (sekali sudah di server, sekali
-      // di daftar draf lokal).
-      if (editingLogbook?.isLocalDraft && editingLogbook?.localDraftId) {
-        onDiscardLocalDraft(editingLogbook.localDraftId);
+      if ((editingLogbook?.isLocalDraft && editingLogbook?.localDraftId) || formData.localDraftId) {
+        onDiscardLocalDraft(formData.localDraftId || editingLogbook.localDraftId);
       }
 
       showToast(isServerLogbook ? 'Perubahan disimpan!' : 'Logbook berhasil dikirim!', 'success');
@@ -2284,13 +2361,20 @@ const LogbookFormView = ({ profile, onSave, onSaveLocalDraft, onDiscardLocalDraf
     <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900">
       <div className="bg-white/90 dark:bg-white/20 backdrop-blur-md px-6 pt-8 pb-4 shadow-sm border-b border-slate-100 dark:border-slate-700 sticky top-0 z-20 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <button onClick={onBack} disabled={isBusy} className="p-2 -ml-2 bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:bg-slate-700 rounded-2xl transition-colors disabled:opacity-50">
+          {/* Ubah onClick di bawah ini menjadi handleBack */}
+          <button onClick={handleBack} disabled={isBusy} className="p-2 -ml-2 bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:bg-slate-700 rounded-2xl transition-colors disabled:opacity-50">
             <ChevronLeft className="w-6 h-6 text-slate-700 dark:text-slate-200" />
           </button>
           <h1 className="text-xl font-extrabold text-slate-800 dark:text-slate-100 tracking-tight">{isEditMode ? 'Edit Logbook' : 'Tulis Logbook'}</h1>
         </div>
+        
+        {/* INDIKATOR AUTO SAVE */}
         <div className={`text-[10px] font-bold px-3 py-1.5 rounded-lg uppercase tracking-wider ${formData.status === 'Draf' ? 'bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200' : 'bg-indigo-50 text-indigo-600'}`}>
-          {isEditMode ? formData.status : 'Baru'}
+          {isAutoSaving ? (
+            <span className="flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin text-indigo-500" /> Auto-save...</span>
+          ) : (
+            isEditMode ? formData.status : 'Baru'
+          )}
         </div>
       </div>
 
@@ -2391,7 +2475,6 @@ const LogbookFormView = ({ profile, onSave, onSaveLocalDraft, onDiscardLocalDraf
           />
         </div>
 
-        {/* BUKTI DOKUMENTASI (GRID UNTUK MAKSIMAL 4 FOTO) */}
         <div className="bg-white dark:bg-slate-800 p-5 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-700">
           <label className="block text-xs font-bold tracking-wide text-slate-500 dark:text-slate-400 uppercase mb-2 flex justify-between">
             Bukti Dokumentasi 
@@ -2622,6 +2705,7 @@ const LaporanAkhirView = ({ laporanData, onSave, onBack, showToast, onDelete }) 
   );
 };
 // 7. Reviewer View (Mentor/DPL Magic Link) — data dari server, bukan dbSim
+// 7. Reviewer View (Mentor/DPL Magic Link) — data dari server, bukan dbSim
 const ReviewerView = ({ reviewerToken, showToast }) => {
   const [activeTab, setActiveTab] = useState('antrean');
   const [selectedMhsId, setSelectedMhsId] = useState(null);
@@ -2631,21 +2715,20 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
   const [mhsList, setMhsList] = useState([]);
   const [pendingLogs, setPendingLogs] = useState([]);
   const [pendingLaporan, setPendingLaporan] = useState([]);
-  // Identitas pemilik token ini (role: 'mentor'|'dpl', nama, dst) --
-  // dikembalikan server di handleGetReviewerQueue_ supaya halaman bisa
-  // menyapa "Halo, Bapak/Ibu [nama]" dan reviewer tahu link ini memang
-  // untuknya (lihat buildReviewerIdentity_ di Api.gs).
   const [reviewerInfo, setReviewerInfo] = useState(null);
 
   const [detailLoading, setDetailLoading] = useState(false);
-  const [detailData, setDetailData] = useState(null); // { mahasiswa, mataKuliah, logbooks, laporan }
+  const [detailData, setDetailData] = useState(null);
 
-  const [actionLoadingId, setActionLoadingId] = useState(null); // id item yg sedang di-approve/revisi
+  const [actionLoadingId, setActionLoadingId] = useState(null);
   const [revisiModal, setRevisiModal] = useState({ isOpen: false, itemId: null, type: '', text: '' });
   const [isSubmittingRevisi, setIsSubmittingRevisi] = useState(false);
 
-  // Tanpa token sama sekali, jangan coba request apa pun ke server --
-  // tampilkan pesan akses ditolak langsung (lihat render di bawah).
+  // --- STATE BARU: Untuk Bulk Approve (Setujui Banyak) ---
+  const [selectedLogs, setSelectedLogs] = useState([]);
+  const [selectedLaporans, setSelectedLaporans] = useState([]);
+  const [isBulkApproving, setIsBulkApproving] = useState(false);
+
   const hasToken = !!reviewerToken;
 
   const loadQueue = useCallback(async () => {
@@ -2661,7 +2744,7 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
         setPendingLogs(cached.pendingLogs || []);
         setPendingLaporan(cached.pendingLaporan || []);
         setReviewerInfo(cached.reviewer || null);
-        setIsLoadingQueue(false); // sudah ada sesuatu untuk ditampilkan
+        setIsLoadingQueue(false);
       },
     });
 
@@ -2676,8 +2759,6 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
       setReviewerInfo(data.reviewer || null);
     } catch (err) {
       if (!gotCacheHit) setLoadError(err.message || 'Gagal memuat antrean.');
-      // Kalau sudah ada cache yang tampil, kegagalan refresh di belakang
-      // tidak perlu mengganggu tampilan -- antrean cache tetap valid untuk dilihat.
     } finally {
       setIsLoadingQueue(false);
     }
@@ -2727,7 +2808,6 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
     try {
       await api.reviewApprove(type, id, reviewerToken);
       showToast(`${type === 'laporan' ? 'Laporan' : 'Logbook'} disetujui!`, 'success');
-      // Refresh antrean & detail (kalau sedang melihat detail mahasiswa)
       await loadQueue();
       if (selectedMhsId) await loadMahasiswaDetail(selectedMhsId);
     } catch (err) {
@@ -2753,6 +2833,55 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
       showToast(err.message || 'Gagal mengirim revisi.', 'error');
     } finally {
       setIsSubmittingRevisi(false);
+    }
+  };
+
+  // --- LOGIKA BARU: Handlers untuk Bulk Action ---
+  const toggleLogSelection = (id) => {
+    setSelectedLogs(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const toggleLaporanSelection = (id) => {
+    setSelectedLaporans(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const handleSelectAll = () => {
+    const isAllSelected = selectedLogs.length === pendingLogs.length && selectedLaporans.length === pendingLaporan.length;
+    if (isAllSelected) {
+      setSelectedLogs([]);
+      setSelectedLaporans([]);
+    } else {
+      setSelectedLogs(pendingLogs.map(log => log.id));
+      setSelectedLaporans(pendingLaporan.map(lap => lap.id));
+    }
+  };
+
+  const handleBulkApprove = async () => {
+    if (selectedLogs.length === 0 && selectedLaporans.length === 0) return;
+    setIsBulkApproving(true);
+    
+    let successCount = 0;
+    try {
+      // Loop berurutan (sequential) untuk mencegah limitasi GAS (Google Apps Script) saat request paralel
+      for (const id of selectedLaporans) {
+        await api.reviewApprove('laporan', id, reviewerToken);
+        successCount++;
+      }
+      for (const id of selectedLogs) {
+        await api.reviewApprove('logbook', id, reviewerToken);
+        successCount++;
+      }
+      
+      showToast(`${successCount} dokumen berhasil disetujui sekaligus!`, 'success');
+      setSelectedLogs([]);
+      setSelectedLaporans([]);
+      await loadQueue();
+    } catch (err) {
+      showToast(`Sebagian gagal. ${successCount} berhasil. Error: ${err.message}`, 'error');
+      // Refresh antrean untuk mengupdate yang sudah berhasil sebelum error
+      await loadQueue();
+    } finally {
+      setIsBulkApproving(false);
     }
   };
 
@@ -2784,15 +2913,13 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
         <Lock className="w-10 h-10 text-rose-500 mb-3" />
         <p className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-1">Akses Ditolak</p>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Halaman ini hanya bisa diakses lewat tautan aman (magic link) yang dikirim ke WhatsApp Mentor/DPL. Tidak ada token akses pada tautan ini.
+          Halaman ini hanya bisa diakses lewat tautan aman (magic link) yang dikirim ke WhatsApp Mentor/DPL.
         </p>
       </div>
     );
   }
 
-  if (isLoadingQueue) {
-    return <PageLoader label="Memuat antrean review..." />;
-  }
+  if (isLoadingQueue) return <PageLoader label="Memuat antrean review..." />;
 
   if (loadError) {
     return (
@@ -2805,9 +2932,9 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
     );
   }
 
+  // (Detail Mahasiswa tetap sama, disingkat untuk fokus pada perubahan)
   if (selectedMhsId) {
     const mhs = mhsList.find(m => m.id === selectedMhsId);
-
     if (detailLoading || !detailData) {
       return (
         <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900">
@@ -2821,7 +2948,6 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
         </div>
       );
     }
-
     const mhsLogs = [...(detailData.logbooks || [])].sort((a,b) => new Date(b.tanggal) - new Date(a.tanggal));
     const mhsLaporans = [...(detailData.laporan || [])].sort((a,b) => new Date(b.tanggal) - new Date(a.tanggal));
     
@@ -2836,7 +2962,6 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
             <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">{detailData.mahasiswa?.nim} • {detailData.mahasiswa?.prodi}</p>
           </div>
         </div>
-
         <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-20">
           <div>
             <h2 className="text-sm font-extrabold text-slate-800 dark:text-slate-100 mb-3 uppercase tracking-wider">Capaian SKS</h2>
@@ -2865,7 +2990,6 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
               )}
             </div>
           </div>
-
           <div>
             <h2 className="text-sm font-extrabold text-slate-800 dark:text-slate-100 mb-3 uppercase tracking-wider flex items-center gap-2">
               <Download className="w-4 h-4 text-emerald-500" /> Laporan Akhir
@@ -2908,7 +3032,6 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
               {mhsLaporans.length === 0 && <p className="text-xs font-medium text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 text-center">Mahasiswa belum mengunggah Laporan Akhir.</p>}
             </div>
           </div>
-
           <div>
              <h2 className="text-sm font-extrabold text-slate-800 dark:text-slate-100 mb-3 uppercase tracking-wider flex items-center gap-2">
                <BookOpen className="w-4 h-4 text-indigo-500" /> Riwayat Logbook
@@ -2934,7 +3057,6 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
                       ))}
                     </div>
                   )}
-
                   <div className="bg-slate-50 dark:bg-slate-900 px-3 py-2 rounded-xl text-[10px] font-medium text-slate-600 dark:text-slate-300 border border-slate-100 dark:border-slate-700 flex items-center gap-2">
                     <BookOpen className="w-3.5 h-3.5 text-indigo-400 shrink-0" /> <span className="truncate">{getLogMkNames(log, detailData.mataKuliah)}</span>
                   </div>
@@ -2983,6 +3105,10 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
       </div>
     );
   }
+
+  // --- HALAMAN UTAMA REVIEWER (ANTREAN & MAHASISWA) ---
+  const isAllSelected = (pendingLogs.length > 0 || pendingLaporan.length > 0) && (selectedLogs.length === pendingLogs.length && selectedLaporans.length === pendingLaporan.length);
+  const totalSelectedCount = selectedLogs.length + selectedLaporans.length;
 
   return (
     <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900 relative">
@@ -3035,7 +3161,7 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 pt-2 pb-24 relative">
+      <div className="flex-1 overflow-y-auto p-6 pt-2 pb-32 relative">
         {activeTab === 'antrean' && (
           (pendingLogs.length === 0 && pendingLaporan.length === 0) ? (
             <div className="bg-white dark:bg-slate-800 p-10 rounded-[2rem] text-center border border-slate-100 dark:border-slate-700 shadow-sm mt-4">
@@ -3048,16 +3174,38 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
           ) : (
             <div className="space-y-5">
               
+              {/* HEADER SELECT ALL */}
+              <div className="flex justify-between items-center bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm sticky top-0 z-20">
+                <h3 className="font-bold text-slate-700 dark:text-slate-200 text-sm">Aksi Massal</h3>
+                <button
+                  onClick={handleSelectAll}
+                  className="text-xs font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-xl hover:bg-indigo-100 transition-colors"
+                >
+                  {isAllSelected ? 'Batal Pilih Semua' : 'Pilih Semua'}
+                </button>
+              </div>
+
               {pendingLaporan.length > 0 && (
                 <div className="mb-6">
                   <h3 className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-3 flex items-center gap-2"><Download className="w-3.5 h-3.5"/> Antrean Laporan Akhir</h3>
                   <div className="space-y-4">
                     {pendingLaporan.map(lap => {
                       const mhs = lap.mahasiswa || mhsList.find(m => m.id === lap.nim) || {};
+                      const isSelected = selectedLaporans.includes(lap.id);
                       return (
-                      <div key={lap.id} className="bg-emerald-50/50 p-5 rounded-[2rem] shadow-sm border border-emerald-100">
+                      <div key={lap.id} className={`bg-emerald-50/50 p-5 rounded-[2rem] shadow-sm border transition-colors ${isSelected ? 'border-emerald-400 bg-emerald-100/50' : 'border-emerald-100'}`}>
                         <div className="flex justify-between items-start mb-4 border-b border-emerald-100/50 pb-4">
                           <div className="flex items-center gap-3">
+                            
+                            {/* CUSTOM CHECKBOX */}
+                            <div
+                               className="w-6 h-6 border-2 rounded-md flex items-center justify-center cursor-pointer transition-colors shrink-0"
+                               onClick={(e) => { e.stopPropagation(); toggleLaporanSelection(lap.id); }}
+                               style={{ borderColor: isSelected ? '#10B981' : '#CBD5E1', backgroundColor: isSelected ? '#10B981' : 'transparent' }}
+                            >
+                               {isSelected && <CheckCircle className="w-4 h-4 text-white" />}
+                            </div>
+
                             <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center font-bold text-emerald-700">
                               {mhs.nama?.charAt(0) || '?'}
                             </div>
@@ -3084,7 +3232,7 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
                         <div className="flex gap-3 mt-4 pt-3 border-t border-emerald-100/50">
                           <button 
                             onClick={() => handleApprove(lap.id, 'laporan')} 
-                            disabled={actionLoadingId === lap.id}
+                            disabled={actionLoadingId === lap.id || isBulkApproving}
                             className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-2xl text-sm font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95 flex justify-center items-center gap-2 disabled:opacity-70"
                           >
                             {actionLoadingId === lap.id ? <ButtonSpinner className="w-4 h-4" /> : <CheckCircle className="w-4 h-4"/>} Setujui
@@ -3105,10 +3253,21 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
                    <div className="space-y-4">
                     {pendingLogs.map(log => {
                       const mhs = log.mahasiswa || {};
+                      const isSelected = selectedLogs.includes(log.id);
                       return (
-                      <div key={log.id} className="bg-white dark:bg-slate-800 p-5 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-700">
+                      <div key={log.id} className={`bg-white dark:bg-slate-800 p-5 rounded-[2rem] shadow-sm border transition-colors ${isSelected ? 'border-emerald-400 bg-emerald-50/30' : 'border-slate-100 dark:border-slate-700'}`}>
                         <div className="flex justify-between items-start mb-4 border-b border-slate-50 dark:border-slate-800 pb-4">
                           <div className="flex items-center gap-3">
+                            
+                            {/* CUSTOM CHECKBOX */}
+                            <div
+                               className="w-6 h-6 border-2 rounded-md flex items-center justify-center cursor-pointer transition-colors shrink-0"
+                               onClick={(e) => { e.stopPropagation(); toggleLogSelection(log.id); }}
+                               style={{ borderColor: isSelected ? '#10B981' : '#CBD5E1', backgroundColor: isSelected ? '#10B981' : 'transparent' }}
+                            >
+                               {isSelected && <CheckCircle className="w-4 h-4 text-white" />}
+                            </div>
+
                             <div className="w-10 h-10 bg-indigo-50 rounded-full flex items-center justify-center font-bold text-indigo-600">
                               {mhs.nama?.charAt(0) || '?'}
                             </div>
@@ -3133,7 +3292,7 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
                         <div className="flex gap-3 mt-4 pt-3 border-t border-slate-50 dark:border-slate-800">
                           <button 
                             onClick={() => handleApprove(log.id, 'logbook')} 
-                            disabled={actionLoadingId === log.id}
+                            disabled={actionLoadingId === log.id || isBulkApproving}
                             className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-2xl text-sm font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95 flex justify-center items-center gap-2 disabled:opacity-70"
                           >
                             {actionLoadingId === log.id ? <ButtonSpinner className="w-4 h-4" /> : <CheckCircle className="w-4 h-4"/>} Setujui
@@ -3181,6 +3340,31 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
           </div>
         )}
       </div>
+
+      {/* --- FLOATING ACTION BAR (BULK APPROVE) --- */}
+      {totalSelectedCount > 0 && activeTab === 'antrean' && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-11/12 max-w-lg bg-slate-900 text-white p-4 rounded-2xl shadow-2xl z-40 flex justify-between items-center animate-in slide-in-from-bottom-10 border border-slate-700">
+          <div className="flex flex-col">
+            <span className="text-sm font-bold flex items-center gap-2">
+              <span className="w-5 h-5 bg-indigo-500 text-white rounded-full flex items-center justify-center text-[10px]">{totalSelectedCount}</span>
+              Item Terpilih
+            </span>
+            <button 
+              onClick={() => { setSelectedLogs([]); setSelectedLaporans([]); }} 
+              className="text-[10px] text-slate-400 text-left hover:text-white transition-colors mt-1"
+            >
+              Batalkan Pilihan
+            </button>
+          </div>
+          <button
+            onClick={handleBulkApprove}
+            disabled={isBulkApproving}
+            className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-3 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors disabled:opacity-70 shadow-lg shadow-emerald-500/20"
+          >
+            {isBulkApproving ? <ButtonSpinner className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />} Setujui Terpilih
+          </button>
+        </div>
+      )}
 
       {revisiModal.isOpen && (
         <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex flex-col justify-end">
@@ -3619,7 +3803,12 @@ export default function App() {
             onSave={handleSaveLogbook} 
             onSaveLocalDraft={handleSaveLocalDraft}
             onDiscardLocalDraft={handleDiscardLocalDraft}
-            onBack={() => { setEditingLogbook(null); setView('dashboard'); }} 
+            onBack={() => { 
+              // Refresh state draf lokal jika terjadi auto-save
+              setLocalDraftsList(localDrafts.list(user.nim)); 
+              setEditingLogbook(null); 
+              setView('dashboard'); 
+            }} 
             showToast={showToast} 
           />
         )}
