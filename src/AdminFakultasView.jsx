@@ -612,7 +612,7 @@ export default function AdminFakultasView({ adminToken }) {
           </h1>
           {scopeInfo?.nama && (
             // <p className="text-sm text-slate-300 mt-1">
-            //   Halo, <span className="font-bold text-white">{scopeInfo.nama}</span> — <span className="font-bold text-white">{scopeInfo.scopeName}</span>
+            //   Tes Halo, <span className="font-bold text-white">{scopeInfo.nama}</span> — <span className="font-bold text-white">{scopeInfo.scopeName}</span>
             // </p>
             <p className="text-sm text-slate-300 mt-1">
               Halo, <span className="font-bold text-white">{scopeInfo.scopeName}</span>
