@@ -242,6 +242,17 @@ export const api = {
   // Api.gs) -- server yang benar-benar mengirim lewat gateway WA &
   // mencatat cooldown, BUKAN simulasi seperti versi sebelumnya.
   sendReminder: (nim) => apiPost('sendReminder', { nim }),
+
+  // --- ADMIN FAKULTAS / KOPRODI ---
+  getAdminFakultasData: (token, tahunAjaranId, opts = {}) =>
+    swr(`adminFakultas_${token}_${tahunAjaranId || 'all'}`, () =>
+      apiGet('getAdminFakultasData', { token, tahunAjaranId: tahunAjaranId || '' }), {
+      onCacheHit: opts.onCacheHit,
+      maxAgeMs: 5 * 60 * 1000,
+    }),
+
+  getMahasiswaDetailForAdmin: (nim, token) =>
+    apiGet('getMahasiswaDetailForAdmin', { nim, token }),
 };
 
 // ---------------------------------------------------------------------
@@ -455,3 +466,4 @@ export const session = {
     }
   },
 };
+
