@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Lock, Users, FileText, BookOpen, Clock, CheckCircle, AlertCircle,
   Download, Search, Loader2, Filter, ChevronDown, ChevronLeft, ChevronRight,
-  TrendingUp, MapPin, Mail, GraduationCap, X, FileWarning
+  TrendingUp, MapPin, Mail, GraduationCap, X, FileWarning, RefreshCw
 } from 'lucide-react';
 import { FaWhatsapp } from 'react-icons/fa';
 import * as XLSX from 'xlsx';
@@ -79,6 +79,16 @@ const buildReminderMessage = (m, scopeInfo) =>
   `Terima kasih atas perhatian dan kerja samanya.\n\n` +
   `Salam,\n${buildSenderLabel(scopeInfo)}`;
 
+// Prioritas TERTINGGI -- kalau Mitra belum diisi, progres jam/waktu
+// (isAtRisk) belum berarti apa-apa (biasanya tglAwal/tglAkhir juga
+// belum terisi karena satu form yang sama). Ajak lengkapi profil dulu.
+const buildCompleteProfileMessage = (m, scopeInfo) =>
+  `Halo ${m.nama} (${m.nim}),\n\n` +
+  `Kami melihat data penugasan (Mitra & Lokasi) Anda pada program Kampus Berdampak belum diisi. ` +
+  `Mohon segera melengkapi profil Anda di aplikasi SIDAMPAK agar proses rekognisi SKS dapat berjalan.\n\n` +
+  `Terima kasih atas perhatian dan kerja samanya.\n\n` +
+  `Salam,\n${buildSenderLabel(scopeInfo)}`;
+
 const PageLoader = ({ label = 'Memuat data...' }) => (
   <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 h-screen">
     <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
@@ -115,8 +125,11 @@ const MahasiswaCard = ({ m, onOpenDetail, scopeInfo }) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleOpenDetail(); }
   };
 
-  const waMessage = m.isAtRisk ? buildReminderMessage(m, scopeInfo) : buildGreetingMessage(m, scopeInfo);
+  const mitraKosong = !m.mitra;
+  const waMessage = mitraKosong ? buildCompleteProfileMessage(m, scopeInfo) : (m.isAtRisk ? buildReminderMessage(m, scopeInfo) : buildGreetingMessage(m, scopeInfo));
   const waHref = waLink(m.wa, waMessage);
+  const waLabel = mitraKosong ? 'Ingatkan Lengkapi Profil' : (m.isAtRisk ? 'Ingatkan Isi Logbook' : 'Kirim Pesan WA');
+  const waTone = mitraKosong ? 'bg-amber-500 text-white hover:bg-amber-600' : (m.isAtRisk ? 'bg-rose-600 text-white hover:bg-rose-700' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100');
 
   return (
     <div
@@ -131,7 +144,11 @@ const MahasiswaCard = ({ m, onOpenDetail, scopeInfo }) => {
           <h3 className="font-bold text-slate-800 truncate">{m.nama}</h3>
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider truncate">{m.nim} • {m.prodi}</p>
         </div>
-        {m.isAtRisk && (
+        {mitraKosong ? (
+          <span className="shrink-0 flex items-center gap-1 bg-amber-50 text-amber-700 text-[9px] font-bold px-2 py-1 rounded-lg uppercase tracking-wide">
+            <AlertCircle className="w-3 h-3" /> Profil Belum Lengkap
+          </span>
+        ) : m.isAtRisk && (
           <span className="shrink-0 flex items-center gap-1 bg-rose-50 text-rose-600 text-[9px] font-bold px-2 py-1 rounded-lg uppercase tracking-wide">
             <AlertCircle className="w-3 h-3" /> Perhatian
           </span>
@@ -140,7 +157,7 @@ const MahasiswaCard = ({ m, onOpenDetail, scopeInfo }) => {
 
       <div className="flex items-center gap-2 text-xs text-slate-500 mb-3">
         <MapPin className="w-3.5 h-3.5 shrink-0 text-slate-400" />
-        <span className="truncate">{m.mitra || 'Mitra belum diisi'}</span>
+        <span className={`truncate ${mitraKosong ? 'text-amber-600 font-semibold' : ''}`}>{m.mitra || 'Mitra belum diisi'}</span>
       </div>
 
       <div className="mb-3">
@@ -174,19 +191,17 @@ const MahasiswaCard = ({ m, onOpenDetail, scopeInfo }) => {
       </div>
 
       {/* Tombol WA -- stopPropagation supaya tidak ikut membuka detail.
-          Normal: sapaan singkat. Perlu Perhatian: pengingat isi logbook. */}
+          Prioritas: Mitra kosong > Perlu Perhatian > sapaan biasa. */}
       {waHref ? (
         <a
           href={waHref}
           target="_blank"
           rel="noreferrer"
           onClick={(e) => e.stopPropagation()}
-          className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-xs font-bold transition-colors ${
-            m.isAtRisk ? 'bg-rose-600 text-white hover:bg-rose-700' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-          }`}
+          className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-xs font-bold transition-colors ${waTone}`}
         >
           <FaWhatsapp className="w-3.5 h-3.5" />
-          {m.isAtRisk ? 'Ingatkan Isi Logbook' : 'Kirim Pesan WA'}
+          {waLabel}
         </a>
       ) : (
         <div className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-xs font-bold bg-slate-50 text-slate-400">
@@ -394,6 +409,7 @@ export default function AdminFakultasView({ adminToken }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('semua');
   const [onlyAtRisk, setOnlyAtRisk] = useState(false);
+  const [onlyMitraKosong, setOnlyMitraKosong] = useState(false);
   const [entriesPerPage, setEntriesPerPage] = useState(12);
   const [currentPage, setCurrentPage] = useState(1);
   const [isExporting, setIsExporting] = useState(false);
@@ -463,9 +479,12 @@ export default function AdminFakultasView({ adminToken }) {
     if (onlyAtRisk) {
       rows = rows.filter(m => m.isAtRisk);
     }
+    if (onlyMitraKosong) {
+      rows = rows.filter(m => !m.mitra);
+    }
     rows.sort((a, b) => (a.nama || '').localeCompare(b.nama || '', 'id'));
     return rows;
-  }, [mahasiswaList, searchTerm, statusFilter, onlyAtRisk, selectedProdi, isAdminFakultas]);
+  }, [mahasiswaList, searchTerm, statusFilter, onlyAtRisk, onlyMitraKosong, selectedProdi, isAdminFakultas]);
 
   const totalPages = entriesPerPage === 'all' ? 1 : Math.ceil(filteredData.length / entriesPerPage);
   const currentEntries = entriesPerPage === 'all'
@@ -611,11 +630,8 @@ export default function AdminFakultasView({ adminToken }) {
             {isAdminFakultas ? 'Portal Admin Fakultas' : 'Portal Koordinator Program Studi'}
           </h1>
           {scopeInfo?.nama && (
-            // <p className="text-sm text-slate-300 mt-1">
-            //   Tes Halo, <span className="font-bold text-white">{scopeInfo.nama}</span> — <span className="font-bold text-white">{scopeInfo.scopeName}</span>
-            // </p>
             <p className="text-sm text-slate-300 mt-1">
-              Halo, <span className="font-bold text-white">{scopeInfo.scopeName}</span>
+              Halo, <span className="font-bold text-white">{scopeInfo.nama}</span> — <span className="font-bold text-white">{scopeInfo.scopeName}</span>
             </p>
           )}
 
@@ -704,6 +720,23 @@ export default function AdminFakultasView({ adminToken }) {
               >
                 <AlertCircle className="w-3.5 h-3.5" /> Perlu Perhatian
                 {onlyAtRisk && <X className="w-3 h-3" />}
+              </button>
+
+              <button
+                onClick={() => { setOnlyMitraKosong(v => !v); setCurrentPage(1); }}
+                className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 ${onlyMitraKosong ? 'bg-amber-500 text-white' : 'bg-slate-50 border border-slate-200 text-slate-600'}`}
+              >
+                <FileWarning className="w-3.5 h-3.5" /> Mitra Belum Diisi
+                {onlyMitraKosong && <X className="w-3 h-3" />}
+              </button>
+
+              <button
+                onClick={() => loadData(selectedTahun)}
+                disabled={isLoading}
+                title="Muat ulang data terbaru"
+                className="p-2 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl disabled:opacity-50"
+              >
+                {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
               </button>
 
               <button

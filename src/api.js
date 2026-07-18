@@ -213,7 +213,7 @@ export const api = {
 
   // --- REVIEWER ---
   // Semua aksi reviewer SEKARANG wajib menyertakan token (lihat
-  // parseReviewerToken_ di Api.gs) -- tanpa token valid, server menolak
+  // parseReviewerToken_ di Utils.gs) -- tanpa token valid, server menolak
   // akses (INVALID_TOKEN). Cache key disertai token supaya reviewer
   // berbeda (mentor A vs mentor B) yang kebetulan memakai browser/device
   // yang sama TIDAK saling melihat cache antrean satu sama lain.
@@ -243,7 +243,10 @@ export const api = {
   // mencatat cooldown, BUKAN simulasi seperti versi sebelumnya.
   sendReminder: (nim) => apiPost('sendReminder', { nim }),
 
+  // ---------------------------------------------------------------------
   // --- ADMIN FAKULTAS / KOPRODI ---
+  // Token magic-link (tanpa login), lihat AdminFakultas.gs.
+  // ---------------------------------------------------------------------
   getAdminFakultasData: (token, tahunAjaranId, opts = {}) =>
     swr(`adminFakultas_${token}_${tahunAjaranId || 'all'}`, () =>
       apiGet('getAdminFakultasData', { token, tahunAjaranId: tahunAjaranId || '' }), {
@@ -251,8 +254,223 @@ export const api = {
       maxAgeMs: 5 * 60 * 1000,
     }),
 
+  // Dipakai BERSAMA oleh AdminFakultasView.jsx (Koprodi/Admin Fakultas)
+  // dan AdminUniversitasView.jsx (Admin Universitas) -- backend-nya
+  // (handleGetMahasiswaDetailForAdmin_ di AdminFakultas.gs) menerima
+  // ketiga jenis token lewat verifyAnyAdminToken_. TIDAK pakai cache SWR
+  // -- data logbook/laporan berubah cukup sering, lebih aman selalu
+  // fresh daripada berisiko menampilkan status basi ke admin.
   getMahasiswaDetailForAdmin: (nim, token) =>
     apiGet('getMahasiswaDetailForAdmin', { nim, token }),
+
+  // ---------------------------------------------------------------------
+  // --- ADMIN UNIVERSITAS ---
+  // Login sungguhan (email + password lewat Supabase Auth) + whitelist
+  // tabel "AdminUniversitas", lihat SuperAdmin.gs. Semua fungsi di bawah
+  // ini butuh token hasil adminUniversitasLogin, BUKAN token URL seperti
+  // Koprodi/Admin Fakultas.
+  //
+  // CACHE: dipakai untuk data yang JARANG berubah atau yang boleh sedikit
+  // basi sebentar (stale-while-revalidate -- tab yang sudah pernah dibuka
+  // tampil INSTAN dari cache, lalu diam-diam diperbarui di belakang).
+  // Setiap aksi TULIS (generate/cabut akses, edit mahasiswa/mentor/dosen,
+  // ubah status massal, CRUD master data) membersihkan cache yang
+  // relevan supaya tidak pernah menampilkan data basi setelah Anda
+  // sendiri yang mengubahnya.
+  // ---------------------------------------------------------------------
+  adminUniversitasLogin: (email, password) =>
+    apiPost('adminUniversitasLogin', { email, password }),
+
+  // Data mahasiswa (list utama) -- sering berubah (status logbook/
+  // laporan), jadi cache PENDEK (5 menit) dengan stale-while-revalidate:
+  // buka tab yang sama lagi -> tampil instan dari cache, sambil diam-diam
+  // ambil versi terbaru di belakang layar.
+  getSuperAdminData: (token, { tahunAjaranId, fakultas, prodi } = {}, opts = {}) =>
+    swr(`superAdminData_${token}_${tahunAjaranId || 'all'}_${fakultas || 'all'}_${prodi || 'all'}`, () =>
+      apiGet('getSuperAdminData', {
+        token,
+        tahunAjaranId: tahunAjaranId || '',
+        fakultas: fakultas || '',
+        prodi: prodi || '',
+      }), {
+      onCacheHit: opts.onCacheHit,
+      maxAgeMs: 5 * 60 * 1000,
+    }),
+
+  // Versi RINGAN dari getSuperAdminData -- HANYA daftar Tahun Ajaran &
+  // Fakultas, TANPA menarik data mahasiswa sama sekali. WAJIB dipakai
+  // di tempat yang cuma butuh isi dropdown filter (Master Data, Logbook
+  // & Laporan) -- jangan pernah panggil getSuperAdminData({}) hanya
+  // untuk ini. Cache PANJANG (24 jam, sama seperti getMasterData) --
+  // Fakultas/Tahun Ajaran jarang sekali berubah.
+  getSuperAdminMeta: (token, opts = {}) =>
+    swr(`superAdminMeta_${token}`, () => apiGet('getSuperAdminMeta', { token }), {
+      onCacheHit: opts.onCacheHit,
+      maxAgeMs: 24 * 60 * 60 * 1000,
+    }),
+
+  // --- Master Data: Fakultas ---
+  // Semua CRUD master data membersihkan cache meta & data sekaligus --
+  // dropdown Fakultas/Prodi dan daftar mahasiswa (yang menampilkan nama
+  // fakultas/prodi) sama-sama harus segar setelah master data diubah.
+  superAdminAddFakultas: async (token, namaFakultas) => {
+    const result = await apiPost('superAdminAddFakultas', { token, namaFakultas });
+    cacheClearPrefix('superAdminMeta_');
+    cacheClearPrefix('superAdminData_');
+    return result;
+  },
+  superAdminUpdateFakultas: async (token, id, namaFakultas) => {
+    const result = await apiPost('superAdminUpdateFakultas', { token, id, namaFakultas });
+    cacheClearPrefix('superAdminMeta_');
+    cacheClearPrefix('superAdminData_');
+    return result;
+  },
+  superAdminDeleteFakultas: async (token, id) => {
+    const result = await apiPost('superAdminDeleteFakultas', { token, id });
+    cacheClearPrefix('superAdminMeta_');
+    cacheClearPrefix('superAdminData_');
+    return result;
+  },
+
+  // --- Master Data: Prodi ---
+  superAdminAddProdi: async (token, namaProdi, namaFakultas) => {
+    const result = await apiPost('superAdminAddProdi', { token, namaProdi, namaFakultas });
+    cacheClearPrefix('superAdminMeta_');
+    cacheClearPrefix('superAdminData_');
+    return result;
+  },
+  superAdminUpdateProdi: async (token, id, namaProdi, namaFakultas) => {
+    const result = await apiPost('superAdminUpdateProdi', { token, id, namaProdi, namaFakultas });
+    cacheClearPrefix('superAdminMeta_');
+    cacheClearPrefix('superAdminData_');
+    return result;
+  },
+  superAdminDeleteProdi: async (token, id) => {
+    const result = await apiPost('superAdminDeleteProdi', { token, id });
+    cacheClearPrefix('superAdminMeta_');
+    cacheClearPrefix('superAdminData_');
+    return result;
+  },
+
+  // --- Master Data: Tahun Ajaran ---
+  superAdminAddTahunAjaran: async (token, namaTahunAjaran) => {
+    const result = await apiPost('superAdminAddTahunAjaran', { token, namaTahunAjaran });
+    cacheClearPrefix('superAdminMeta_');
+    cacheClearPrefix('superAdminData_');
+    return result;
+  },
+  superAdminSetTahunAjaranAktif: async (token, id) => {
+    const result = await apiPost('superAdminSetTahunAjaranAktif', { token, id });
+    cacheClearPrefix('superAdminMeta_');
+    cacheClearPrefix('superAdminData_');
+    return result;
+  },
+  superAdminDeleteTahunAjaran: async (token, id) => {
+    const result = await apiPost('superAdminDeleteTahunAjaran', { token, id });
+    cacheClearPrefix('superAdminMeta_');
+    cacheClearPrefix('superAdminData_');
+    return result;
+  },
+
+  // --- Manajemen Akses Koprodi / Admin Fakultas ---
+  // Daftar akses cuma berubah saat generate/cabut/isi WA -- cache
+  // sedang (10 menit), dibersihkan otomatis oleh ketiga aksi tsb.
+  superAdminGetAdminAkses: (token, opts = {}) =>
+    swr(`superAdminAkses_${token}`, () => apiGet('superAdminGetAdminAkses', { token }), {
+      onCacheHit: opts.onCacheHit,
+      maxAgeMs: 10 * 60 * 1000,
+    }),
+  superAdminGenerateAdminAkses: async (token, { nama, role, scope, wa }) => {
+    const result = await apiPost('superAdminGenerateAdminAkses', { token, nama, role, scope, wa });
+    cacheClearPrefix('superAdminAkses_');
+    return result;
+  },
+  superAdminRevokeAdminAkses: async (token, id) => {
+    const result = await apiPost('superAdminRevokeAdminAkses', { token, id });
+    cacheClearPrefix('superAdminAkses_');
+    return result;
+  },
+  // Membangun ulang link akses yang SUDAH ADA (token tidak pernah
+  // disimpan, jadi ini menandatangani ulang payload yang sama persis --
+  // hasilnya identik, bukan token baru). TIDAK di-cache -- setiap tombol
+  // "Kirim WA" harus dapat status terbaru (kalau akses baru saja
+  // dicabut, harus langsung tahu, bukan dari cache yang mengira masih aktif).
+  superAdminGetAdminAksesLink: (token, id) =>
+    apiGet('superAdminGetAdminAksesLink', { token, id }),
+  // Mengisi/mengganti nomor WA satu baris AdminAkses (dipakai saat
+  // "Kirim WA" diklik tapi nomornya belum pernah diisi).
+  superAdminUpdateAdminAksesWa: async (token, id, wa) => {
+    const result = await apiPost('superAdminUpdateAdminAksesWa', { token, id, wa });
+    cacheClearPrefix('superAdminAkses_');
+    return result;
+  },
+
+  // --- Manajemen Data: Mahasiswa / Mentor / Dosen (EDIT saja, TIDAK
+  // ada fungsi hapus -- lihat catatan di SuperAdmin.gs) ---
+  // Membersihkan cache getSuperAdminData -- listing mahasiswa menampilkan
+  // nama/WA/prodi/fakultas/nama mentor/nama DPL yang baru saja diedit.
+  superAdminUpdateMahasiswa: async (token, { nim, nama, wa, email, prodi, fakultas }) => {
+    const result = await apiPost('superAdminUpdateMahasiswa', { token, nim, nama, wa, email, prodi, fakultas });
+    cacheClearPrefix('superAdminData_');
+    return result;
+  },
+  // Reset password TIDAK perlu bersihkan cache apa pun -- password tidak
+  // pernah ditampilkan di listing mana pun, hanya sekali di layar hasil.
+  superAdminResetMahasiswaPassword: (token, nim) =>
+    apiPost('superAdminResetMahasiswaPassword', { token, nim }),
+  superAdminUpdateMentor: async (token, { email, nama, jabatan, wa, namaMitra }) => {
+    const result = await apiPost('superAdminUpdateMentor', { token, email, nama, jabatan, wa, namaMitra });
+    cacheClearPrefix('superAdminData_');
+    return result;
+  },
+  superAdminUpdateDosen: async (token, { nuptk, nama, jabatan, wa, email }) => {
+    const result = await apiPost('superAdminUpdateDosen', { token, nuptk, nama, jabatan, wa, email });
+    cacheClearPrefix('superAdminData_');
+    return result;
+  },
+
+  // --- Manajemen Logbook & Laporan lintas universitas (ubah status
+  // massal -- dipilih satu-satu ATAU seluruh hasil filter) ---
+  // Cache PENDEK (2 menit) -- status logbook/laporan berubah cukup
+  // sering (approve Mentor/DPL berjalan di luar kendali Admin
+  // Universitas), jadi tidak boleh basi lama, tapi tetap dicache
+  // supaya ganti-ganti filter yang SAMA berulang kali terasa instan.
+  getSuperAdminLogbookList: (token, { tahunAjaranId, fakultas, prodi, nim, status } = {}, opts = {}) =>
+    swr(`superAdminLogbook_${token}_${tahunAjaranId || 'all'}_${fakultas || 'all'}_${prodi || 'all'}_${nim || 'all'}_${status || 'all'}`, () =>
+      apiGet('getSuperAdminLogbookList', {
+        token,
+        tahunAjaranId: tahunAjaranId || '',
+        fakultas: fakultas || '',
+        prodi: prodi || '',
+        nim: nim || '',
+        status: status || '',
+      }), {
+      onCacheHit: opts.onCacheHit,
+      maxAgeMs: 2 * 60 * 1000,
+    }),
+  getSuperAdminLaporanList: (token, { tahunAjaranId, fakultas, prodi, nim, status } = {}, opts = {}) =>
+    swr(`superAdminLaporan_${token}_${tahunAjaranId || 'all'}_${fakultas || 'all'}_${prodi || 'all'}_${nim || 'all'}_${status || 'all'}`, () =>
+      apiGet('getSuperAdminLaporanList', {
+        token,
+        tahunAjaranId: tahunAjaranId || '',
+        fakultas: fakultas || '',
+        prodi: prodi || '',
+        nim: nim || '',
+        status: status || '',
+      }), {
+      onCacheHit: opts.onCacheHit,
+      maxAgeMs: 2 * 60 * 1000,
+    }),
+  // Bulk update mengubah status BANYAK logbook/laporan -- bersihkan
+  // cache list logbook/laporan DAN getSuperAdminData (listing mahasiswa
+  // menampilkan jumlah logbook per status & progres yang ikut berubah).
+  superAdminBulkUpdateStatus: async (token, { type, ids, status, catatan }) => {
+    const result = await apiPost('superAdminBulkUpdateStatus', { token, type, ids, status, catatan });
+    cacheClearPrefix('superAdminLogbook_');
+    cacheClearPrefix('superAdminLaporan_');
+    cacheClearPrefix('superAdminData_');
+    return result;
+  },
 };
 
 // ---------------------------------------------------------------------
@@ -466,4 +684,3 @@ export const session = {
     }
   },
 };
-
