@@ -4,12 +4,12 @@ import {
   Loader2, Filter, ChevronDown, ChevronLeft, ChevronRight, TrendingUp,
   MapPin, GraduationCap, X, FileWarning, LogOut, LayoutDashboard,
   Building2, BookOpen, KeyRound, Plus, Trash2, Pencil, Copy, Check,
-  Eye, EyeOff, RefreshCw
+  Eye, EyeOff, RefreshCw, Mail, Sun, Moon, Menu
 } from 'lucide-react';
 import { FaWhatsapp } from 'react-icons/fa';
 import * as XLSX from 'xlsx';
 
-import { api } from './api'; // lihat catatan kontrak backend di bagian bawah file ini
+import { api, theme } from './api'; // lihat catatan kontrak backend di bagian bawah file ini
 
 // =====================================================================
 // UTIL LOKAL -- file ini MANDIRI, sama seperti AdminFakultasView.jsx
@@ -38,13 +38,13 @@ const formatDateIndoShort = (raw) => {
   return isNaN(d.getTime()) ? '-' : d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 };
 const getStatusBadgeClass = (status) => {
-  if (status === 'Disetujui') return 'bg-emerald-100 text-emerald-700';
-  if (status === 'Draf') return 'bg-slate-200 text-slate-700';
-  if (status === 'Revisi Mentor') return 'bg-rose-100 text-rose-700';
+  if (status === 'Disetujui') return 'bg-emerald-100 text-emerald-700 dark:text-emerald-400';
+  if (status === 'Draf') return 'bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200';
+  if (status === 'Revisi Mentor') return 'bg-rose-100 text-rose-700 dark:text-rose-400';
   if (status === 'Revisi DPL') return 'bg-orange-100 text-orange-700';
-  if (status === 'Menunggu Persetujuan Mentor') return 'bg-amber-100 text-amber-700';
-  if (status === 'Menunggu Persetujuan DPL') return 'bg-indigo-100 text-indigo-700';
-  return 'bg-slate-100 text-slate-500';
+  if (status === 'Menunggu Persetujuan Mentor') return 'bg-amber-100 text-amber-700 dark:text-amber-400';
+  if (status === 'Menunggu Persetujuan DPL') return 'bg-indigo-100 text-indigo-700 dark:text-indigo-400';
+  return 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400';
 };
 const waLink = (wa, text) => {
   if (!wa) return null;
@@ -53,9 +53,9 @@ const waLink = (wa, text) => {
 };
 
 const PageLoader = ({ label = 'Memuat data...' }) => (
-  <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 h-screen">
-    <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
-    <p className="mt-4 text-slate-500 font-bold text-sm tracking-widest uppercase text-center px-8">{label}</p>
+  <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900 h-screen">
+    <Loader2 className="w-10 h-10 text-indigo-600 dark:text-indigo-400 animate-spin" />
+    <p className="mt-4 text-slate-500 dark:text-slate-400 font-bold text-sm tracking-widest uppercase text-center px-8">{label}</p>
   </div>
 );
 
@@ -78,11 +78,20 @@ const Toast = ({ message, type = 'success', onClose }) => {
   );
 };
 
-// =====================================================================
-// SESSION (localStorage) -- BEDA dari admin token URL (koprodi/fakultas)
-// karena ini benar-benar login: token 12 jam, dipegang browser, bukan
-// dibagikan lewat link.
-// =====================================================================
+// Tombol toggle light/dark, ikon menunjukkan TUJUAN tekan (bukan status
+// saat ini) -- sama persis pola yang dipakai App.jsx (Mahasiswa).
+const ThemeToggle = ({ mode, onToggle, className = '' }) => (
+  <button
+    type="button"
+    onClick={onToggle}
+    aria-label={mode === 'dark' ? 'Ganti ke mode terang' : 'Ganti ke mode gelap'}
+    className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-colors shrink-0 ${className}`}
+  >
+    {mode === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+  </button>
+);
+
+
 const SESSION_KEY = 'sidampak_superadmin_session';
 const superAdminSession = {
   save(token, nama, email) {
@@ -101,7 +110,7 @@ const superAdminSession = {
 // =====================================================================
 // LOGIN VIEW
 // =====================================================================
-const SuperAdminLoginView = ({ onLoggedIn }) => {
+const SuperAdminLoginView = ({ onLoggedIn, themeMode, onToggleTheme }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -125,67 +134,103 @@ const SuperAdminLoginView = ({ onLoggedIn }) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 relative overflow-hidden">
-      <div className="absolute top-0 left-0 w-full h-[420px] bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 rounded-b-[3rem] shadow-lg transform -skew-y-3 -translate-y-20"></div>
+    <div className="flex flex-col h-screen bg-slate-50 dark:bg-slate-900 relative overflow-hidden">
+      {/* Gradient header + logo + judul "SIDAMPAK" -- disamakan persis
+          dengan LoginView Mahasiswa (App.jsx) supaya identitas brand
+          konsisten lintas portal, cuma subjudul & isi form yang beda. */}
+      <div className="absolute top-0 left-0 w-full h-[450px] bg-gradient-to-br from-indigo-600 via-blue-600 to-indigo-800 dark:from-slate-800 dark:via-indigo-950 dark:to-slate-900 rounded-b-[3rem] shadow-lg transform -skew-y-6 -translate-y-24"></div>
 
-      <div className="relative z-10 w-full max-w-sm">
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-white/10 backdrop-blur-md rounded-3xl flex items-center justify-center mx-auto mb-4 border border-white/20">
-            <Lock className="w-7 h-7 text-white" />
-          </div>
-          <h1 className="text-2xl font-extrabold text-white tracking-tight">Admin Universitas</h1>
-          <p className="text-indigo-200 text-xs font-medium mt-1">SIDAMPAK &middot; Kampus Berdampak UNTAD</p>
+      <ThemeToggle
+        mode={themeMode}
+        onToggle={onToggleTheme}
+        className="absolute top-6 right-6 z-20 bg-white/15 text-white hover:bg-white/25 backdrop-blur-md border border-white/20"
+      />
+
+      <div className="flex-1 flex flex-col items-center justify-center p-8 relative z-10 overflow-y-auto">
+        <div className="w-24 h-24 bg-white/90 backdrop-blur-xl rounded-3xl flex items-center justify-center mb-6 shadow-2xl border border-white/30 ring-4 ring-white/10 p-2 overflow-hidden shrink-0">
+          <img
+            src="/untad.png"
+            alt="Logo UNTAD"
+            className="w-full h-full object-contain"
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%234f46e5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z'%3E%3C/path%3E%3Cpath d='M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z'%3E%3C/path%3E%3C/svg%3E";
+            }}
+          />
         </div>
 
-        <div className="bg-white rounded-[2rem] shadow-2xl p-7 border border-slate-100">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold tracking-wide text-slate-500 uppercase mb-1.5 ml-1">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={isSubmitting}
-                placeholder="admin@untad.ac.id"
-                className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none disabled:opacity-60"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold tracking-wide text-slate-500 uppercase mb-1.5 ml-1">Kata Sandi</label>
+        <div className="text-center mb-8 shrink-0">
+          <h1 className="text-4xl font-black text-white tracking-tight mb-2 drop-shadow-md">SIDAMPAK</h1>
+          <p className="text-indigo-100 font-medium text-sm leading-relaxed px-2">
+            Portal Admin Universitas<br/>
+            <span className="font-bold text-white">Universitas Tadulako</span>
+          </p>
+        </div>
+
+        <div className="w-full max-w-sm bg-white dark:bg-slate-800 rounded-[2rem] shadow-2xl shadow-indigo-900/10 p-8 border border-slate-100 dark:border-slate-700">
+          <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-6 text-center">Masuk ke Akun Anda</h2>
+
+          <form onSubmit={handleSubmit} className="w-full space-y-5">
+            <div className="mb-4 relative">
+              <label className="block text-xs font-bold tracking-wide text-slate-500 dark:text-slate-400 uppercase mb-1.5 ml-1">Email</label>
               <div className="relative">
+                <Mail className="absolute left-4 top-3.5 w-5 h-5 text-slate-400 dark:text-slate-500" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={isSubmitting}
+                  placeholder="admin@untad.ac.id"
+                  className="w-full p-3.5 pl-11 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-2xl text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-800 transition-all duration-200 outline-none shadow-sm hover:border-slate-300 dark:hover:border-slate-500 disabled:opacity-60 disabled:cursor-not-allowed"
+                />
+              </div>
+            </div>
+
+            <div className="mb-4 relative">
+              <label className="block text-xs font-bold tracking-wide text-slate-500 dark:text-slate-400 uppercase mb-1.5 ml-1">Kata Sandi</label>
+              <div className="relative">
+                <Lock className="absolute left-4 top-3.5 w-5 h-5 text-slate-400 dark:text-slate-500" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={isSubmitting}
                   placeholder="••••••••"
-                  className="w-full p-3.5 pr-11 bg-slate-50 border border-slate-200 rounded-2xl text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none disabled:opacity-60"
+                  className="w-full p-3.5 pl-11 pr-11 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-2xl text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-800 transition-all duration-200 outline-none shadow-sm hover:border-slate-300 dark:hover:border-slate-500 disabled:opacity-60 disabled:cursor-not-allowed"
                 />
-                <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3.5 top-3.5 text-slate-400">
+                <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3.5 top-3.5 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:text-slate-300 transition-colors">
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
             </div>
 
             {error && (
-              <p className="text-rose-500 text-xs font-medium flex items-center gap-1.5 bg-rose-50 p-3 rounded-xl">
-                <AlertCircle className="w-4 h-4 shrink-0" /> {error}
+              <p className="text-rose-500 text-xs font-medium flex items-center gap-1.5 -mt-2">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {error}
               </p>
             )}
 
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full bg-slate-900 text-white font-bold p-4 rounded-2xl hover:bg-slate-800 transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-70 mt-2"
+              className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 text-white font-bold p-4 rounded-2xl mt-4 hover:shadow-lg hover:shadow-indigo-500/30 transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-70"
             >
-              {isSubmitting ? <><ButtonSpinner /> Memeriksa...</> : 'Masuk'}
+              {isSubmitting ? <><ButtonSpinner /> Memeriksa...</> : 'Mulai Sesi'}
             </button>
           </form>
+
+          <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-700 text-center">
+            <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider flex items-center justify-center gap-1.5">
+              <Lock className="w-3 h-3" /> Akses Terbatas Admin Universitas
+            </p>
+          </div>
         </div>
 
-        <p className="text-center text-[10px] text-slate-400 font-bold tracking-widest uppercase mt-8">
-          © PMM UNTAD 2026 &middot; Akses Terbatas
-        </p>
+        <div className="mt-8 text-center shrink-0">
+          <p className="text-[10px] text-slate-400 dark:text-slate-500 font-extrabold tracking-widest uppercase">
+            © PMM UNTAD 2026
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -247,13 +292,22 @@ const RingkasanTab = ({ mahasiswaList, fakultasOptions, onRefresh, isLoading }) 
       .sort((a, b) => b.jumlah - a.jumlah);
   }, [mahasiswaList]);
 
-  // Rekap per DPL -- dikelompokkan berdasarkan NUPTK (identitas asli),
-  // ditampilkan pakai nama. Mahasiswa yang belum punya DPL masuk
-  // kelompok "Belum Ditentukan" -- ini yang paling penting dipantau,
-  // karena tanpa DPL logbook tidak akan pernah bisa disetujui.
+  // --- Rekap per DPL: satu-satunya tabel yang punya search/filter/
+  // pagination -- daftar dosen se-universitas bisa sangat panjang,
+  // beda dari Fakultas/Jenis Program yang jumlah barisnya kecil (~10-15).
+  const [dplSearchTerm, setDplSearchTerm] = useState('');
+  const [dplFilterFakultas, setDplFilterFakultas] = useState('semua');
+  const [dplEntriesPerPage, setDplEntriesPerPage] = useState(10);
+  const [dplCurrentPage, setDplCurrentPage] = useState(1);
+
+  // Filter berdasarkan Fakultas dilakukan di level MAHASISWA dulu
+  // (sebelum diagregasi per DPL) -- supaya "DPL yang membimbing
+  // mahasiswa Fakultas X" benar-benar cuma menghitung bimbingan di
+  // fakultas itu, bukan seluruh bimbingannya di fakultas lain juga.
   const rekapDpl = useMemo(() => {
+    const scoped = dplFilterFakultas === 'semua' ? mahasiswaList : mahasiswaList.filter(m => m.fakultas === dplFilterFakultas);
     const map = {};
-    mahasiswaList.forEach(m => {
+    scoped.forEach(m => {
       const key = m.dplNuptk || 'Belum Ditentukan';
       const nama = m.dplNuptk ? (m.dplNama || 'Tanpa Nama') : 'Belum Ditentukan';
       if (!map[key]) map[key] = { nuptk: key, nama, jumlah: 0, laporanDisetujui: 0, perluPerhatian: 0, totalProgress: 0 };
@@ -265,127 +319,211 @@ const RingkasanTab = ({ mahasiswaList, fakultasOptions, onRefresh, isLoading }) 
     return Object.values(map)
       .map(r => ({ ...r, avgProgress: r.jumlah > 0 ? Math.round(r.totalProgress / r.jumlah) : 0 }))
       .sort((a, b) => b.jumlah - a.jumlah);
-  }, [mahasiswaList]);
+  }, [mahasiswaList, dplFilterFakultas]);
+
+  const rekapDplFiltered = useMemo(() => {
+    const term = (dplSearchTerm || '').toLowerCase();
+    if (!term) return rekapDpl;
+    return rekapDpl.filter(r => r.nama.toLowerCase().includes(term));
+  }, [rekapDpl, dplSearchTerm]);
+
+  const dplTotalPages = dplEntriesPerPage === 'all' ? 1 : Math.max(1, Math.ceil(rekapDplFiltered.length / dplEntriesPerPage));
+  const dplCurrentEntries = dplEntriesPerPage === 'all' ? rekapDplFiltered : rekapDplFiltered.slice((dplCurrentPage - 1) * dplEntriesPerPage, dplCurrentPage * dplEntriesPerPage);
+
+  // --- Export Excel, satu fungsi generik dipakai ketiga tabel ---
+  const exportRekap = (rows, labelHeader, labelField, filenamePart) => {
+    const sheetData = rows.map(r => ({
+      [labelHeader]: r[labelField],
+      'Jumlah Mahasiswa': r.jumlah,
+      'Laporan Disetujui': r.laporanDisetujui,
+      'Perlu Perhatian': r.perluPerhatian,
+      'Rata-rata Progres (%)': r.avgProgress,
+    }));
+    const ws = XLSX.utils.json_to_sheet(sheetData);
+    ws['!cols'] = [{ wch: 32 }, { wch: 18 }, { wch: 18 }, { wch: 16 }, { wch: 20 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, filenamePart.slice(0, 31));
+    XLSX.writeFile(wb, `SIDAMPAK_${filenamePart}_${Date.now()}.xlsx`.replace(/\s+/g, '_'));
+  };
 
   return (
     <div className="space-y-5">
       <div className="flex justify-end">
         <button onClick={onRefresh} disabled={isLoading}
-          className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg disabled:opacity-50">
+          className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-lg disabled:opacity-50">
           {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} Muat Ulang
         </button>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <StatCard icon={Users} value={summary.total} label="Total Mahasiswa" tone="bg-white border-slate-100" />
-        <StatCard icon={CheckCircle} value={summary.laporanDisetujui} label="Laporan Disetujui" tone="bg-emerald-50 border-emerald-100 text-emerald-700" />
-        <StatCard icon={FileText} value={summary.logbookPending} label="Logbook Pending" tone="bg-amber-50 border-amber-100 text-amber-700" />
-        <StatCard icon={AlertCircle} value={summary.perluPerhatian} label="Perlu Perhatian" tone="bg-rose-50 border-rose-100 text-rose-700" />
-        <StatCard icon={GraduationCap} value={summary.dplTerlibat} label="DPL Terlibat" tone="bg-indigo-50 border-indigo-100 text-indigo-700" />
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <StatCard icon={Users} value={summary.total} label="Total Mahasiswa" tone="bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700" />
+        <StatCard icon={CheckCircle} value={summary.laporanDisetujui} label="Laporan Disetujui" tone="bg-emerald-50 dark:bg-emerald-900/30 border-emerald-100 dark:border-emerald-800/50 text-emerald-700 dark:text-emerald-400" />
+        <StatCard icon={FileText} value={summary.logbookPending} label="Logbook Pending" tone="bg-amber-50 dark:bg-amber-900/30 border-amber-100 dark:border-amber-800/50 text-amber-700 dark:text-amber-400" />
+        <StatCard icon={AlertCircle} value={summary.perluPerhatian} label="Perlu Perhatian" tone="bg-rose-50 dark:bg-rose-900/30 border-rose-100 dark:border-rose-800/50 text-rose-700 dark:text-rose-400" />
+        <StatCard icon={GraduationCap} value={summary.dplTerlibat} label="DPL Terlibat" tone="bg-indigo-50 dark:bg-indigo-900/30 border-indigo-100 dark:border-indigo-800/50 text-indigo-700 dark:text-indigo-400" />
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-        <div className="p-4 border-b border-slate-100">
-          <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
+        <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+          <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm flex items-center gap-2">
             <Building2 className="w-4 h-4 text-indigo-500" /> Rekap per Fakultas
           </h3>
+          <button onClick={() => exportRekap(rekapFakultas, 'Fakultas', 'fakultas', 'Rekap_Fakultas')} disabled={rekapFakultas.length === 0}
+            className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2.5 py-1.5 rounded-lg disabled:opacity-40">
+            <Download className="w-3 h-3" /> Export
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-100">
-                <th className="p-3 text-[10px] font-bold text-slate-500 uppercase">Fakultas</th>
-                <th className="p-3 text-[10px] font-bold text-slate-500 uppercase text-center">Mahasiswa</th>
-                <th className="p-3 text-[10px] font-bold text-slate-500 uppercase text-center">Laporan OK</th>
-                <th className="p-3 text-[10px] font-bold text-slate-500 uppercase text-center">Perlu Perhatian</th>
-                <th className="p-3 text-[10px] font-bold text-slate-500 uppercase text-center">Rata Progres</th>
+              <tr className="bg-slate-50 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700">
+                <th className="p-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Fakultas</th>
+                <th className="p-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase text-center">Mahasiswa</th>
+                <th className="p-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase text-center">Laporan OK</th>
+                <th className="p-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase text-center">Perlu Perhatian</th>
+                <th className="p-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase text-center">Rata Progres</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
               {rekapFakultas.map(r => (
-                <tr key={r.fakultas} className="hover:bg-slate-50">
-                  <td className="p-3 text-xs font-semibold text-slate-700">{r.fakultas}</td>
-                  <td className="p-3 text-xs font-bold text-slate-800 text-center">{r.jumlah}</td>
-                  <td className="p-3 text-xs font-bold text-emerald-600 text-center">{r.laporanDisetujui}</td>
-                  <td className="p-3 text-xs font-bold text-rose-600 text-center">{r.perluPerhatian || '-'}</td>
-                  <td className="p-3 text-xs font-bold text-indigo-600 text-center">{r.avgProgress}%</td>
+                <tr key={r.fakultas} className="hover:bg-slate-50 dark:hover:bg-slate-800">
+                  <td className="p-3 text-xs font-semibold text-slate-700 dark:text-slate-200">{r.fakultas}</td>
+                  <td className="p-3 text-xs font-bold text-slate-800 dark:text-slate-100 text-center">{r.jumlah}</td>
+                  <td className="p-3 text-xs font-bold text-emerald-600 dark:text-emerald-400 text-center">{r.laporanDisetujui}</td>
+                  <td className="p-3 text-xs font-bold text-rose-600 dark:text-rose-400 text-center">{r.perluPerhatian || '-'}</td>
+                  <td className="p-3 text-xs font-bold text-indigo-600 dark:text-indigo-400 text-center">{r.avgProgress}%</td>
                 </tr>
               ))}
               {rekapFakultas.length === 0 && (
-                <tr><td colSpan="5" className="p-6 text-center text-xs text-slate-400">Belum ada data.</td></tr>
+                <tr><td colSpan="5" className="p-6 text-center text-xs text-slate-400 dark:text-slate-500">Belum ada data.</td></tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-        <div className="p-4 border-b border-slate-100">
-          <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
+        <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+          <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm flex items-center gap-2">
             <BookOpen className="w-4 h-4 text-indigo-500" /> Rekap per Jenis Program
           </h3>
+          <button onClick={() => exportRekap(rekapJenisProgram, 'Jenis Program', 'jenisProgram', 'Rekap_JenisProgram')} disabled={rekapJenisProgram.length === 0}
+            className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2.5 py-1.5 rounded-lg disabled:opacity-40">
+            <Download className="w-3 h-3" /> Export
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-100">
-                <th className="p-3 text-[10px] font-bold text-slate-500 uppercase">Jenis Program</th>
-                <th className="p-3 text-[10px] font-bold text-slate-500 uppercase text-center">Mahasiswa</th>
-                <th className="p-3 text-[10px] font-bold text-slate-500 uppercase text-center">Laporan OK</th>
-                <th className="p-3 text-[10px] font-bold text-slate-500 uppercase text-center">Perlu Perhatian</th>
-                <th className="p-3 text-[10px] font-bold text-slate-500 uppercase text-center">Rata Progres</th>
+              <tr className="bg-slate-50 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700">
+                <th className="p-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Jenis Program</th>
+                <th className="p-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase text-center">Mahasiswa</th>
+                <th className="p-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase text-center">Laporan OK</th>
+                <th className="p-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase text-center">Perlu Perhatian</th>
+                <th className="p-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase text-center">Rata Progres</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
               {rekapJenisProgram.map(r => (
-                <tr key={r.jenisProgram} className="hover:bg-slate-50">
-                  <td className="p-3 text-xs font-semibold text-slate-700">{r.jenisProgram}</td>
-                  <td className="p-3 text-xs font-bold text-slate-800 text-center">{r.jumlah}</td>
-                  <td className="p-3 text-xs font-bold text-emerald-600 text-center">{r.laporanDisetujui}</td>
-                  <td className="p-3 text-xs font-bold text-rose-600 text-center">{r.perluPerhatian || '-'}</td>
-                  <td className="p-3 text-xs font-bold text-indigo-600 text-center">{r.avgProgress}%</td>
+                <tr key={r.jenisProgram} className="hover:bg-slate-50 dark:hover:bg-slate-800">
+                  <td className="p-3 text-xs font-semibold text-slate-700 dark:text-slate-200">{r.jenisProgram}</td>
+                  <td className="p-3 text-xs font-bold text-slate-800 dark:text-slate-100 text-center">{r.jumlah}</td>
+                  <td className="p-3 text-xs font-bold text-emerald-600 dark:text-emerald-400 text-center">{r.laporanDisetujui}</td>
+                  <td className="p-3 text-xs font-bold text-rose-600 dark:text-rose-400 text-center">{r.perluPerhatian || '-'}</td>
+                  <td className="p-3 text-xs font-bold text-indigo-600 dark:text-indigo-400 text-center">{r.avgProgress}%</td>
                 </tr>
               ))}
               {rekapJenisProgram.length === 0 && (
-                <tr><td colSpan="5" className="p-6 text-center text-xs text-slate-400">Belum ada data.</td></tr>
+                <tr><td colSpan="5" className="p-6 text-center text-xs text-slate-400 dark:text-slate-500">Belum ada data.</td></tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-        <div className="p-4 border-b border-slate-100">
-          <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
+        <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between flex-wrap gap-2">
+          <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm flex items-center gap-2">
             <GraduationCap className="w-4 h-4 text-indigo-500" /> Rekap per DPL
           </h3>
+          <button onClick={() => exportRekap(rekapDplFiltered, 'Nama DPL', 'nama', 'Rekap_DPL')} disabled={rekapDplFiltered.length === 0}
+            className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2.5 py-1.5 rounded-lg disabled:opacity-40">
+            <Download className="w-3 h-3" /> Export
+          </button>
         </div>
+
+        {/* Filter bar khusus DPL: search, filter fakultas, show per halaman */}
+        <div className="p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50 flex flex-wrap gap-2 items-center">
+          <div className="relative flex-1 min-w-[180px]">
+            <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+            <input
+              type="text"
+              placeholder="Cari nama DPL..."
+              value={dplSearchTerm}
+              onChange={e => { setDplSearchTerm(e.target.value); setDplCurrentPage(1); }}
+              className="w-full pl-8 pr-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <div className="relative">
+            <select value={dplFilterFakultas} onChange={e => { setDplFilterFakultas(e.target.value); setDplCurrentPage(1); }}
+              className="appearance-none pl-3 pr-7 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-xs font-bold outline-none cursor-pointer max-w-[160px]">
+              <option value="semua">Semua Fakultas</option>
+              {fakultasOptions.map(f => <option key={f} value={f}>{f}</option>)}
+            </select>
+            <Filter className="w-3 h-3 text-slate-400 dark:text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400">Tampil:</label>
+            <select value={dplEntriesPerPage} onChange={e => { setDplEntriesPerPage(e.target.value === 'all' ? 'all' : Number(e.target.value)); setDplCurrentPage(1); }}
+              className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg px-2 py-2 text-xs font-bold outline-none cursor-pointer">
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value="all">Semua</option>
+            </select>
+          </div>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-100">
-                <th className="p-3 text-[10px] font-bold text-slate-500 uppercase">Nama DPL</th>
-                <th className="p-3 text-[10px] font-bold text-slate-500 uppercase text-center">Bimbingan</th>
-                <th className="p-3 text-[10px] font-bold text-slate-500 uppercase text-center">Laporan OK</th>
-                <th className="p-3 text-[10px] font-bold text-slate-500 uppercase text-center">Perlu Perhatian</th>
-                <th className="p-3 text-[10px] font-bold text-slate-500 uppercase text-center">Rata Progres</th>
+              <tr className="bg-slate-50 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700">
+                <th className="p-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Nama DPL</th>
+                <th className="p-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase text-center">Bimbingan</th>
+                <th className="p-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase text-center">Laporan OK</th>
+                <th className="p-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase text-center">Perlu Perhatian</th>
+                <th className="p-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase text-center">Rata Progres</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
-              {rekapDpl.map(r => (
-                <tr key={r.nuptk} className={`hover:bg-slate-50 ${r.nuptk === 'Belum Ditentukan' ? 'bg-rose-50/30' : ''}`}>
-                  <td className={`p-3 text-xs font-semibold ${r.nuptk === 'Belum Ditentukan' ? 'text-rose-600' : 'text-slate-700'}`}>{r.nama}</td>
-                  <td className="p-3 text-xs font-bold text-slate-800 text-center">{r.jumlah}</td>
-                  <td className="p-3 text-xs font-bold text-emerald-600 text-center">{r.laporanDisetujui}</td>
-                  <td className="p-3 text-xs font-bold text-rose-600 text-center">{r.perluPerhatian || '-'}</td>
-                  <td className="p-3 text-xs font-bold text-indigo-600 text-center">{r.avgProgress}%</td>
+            <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
+              {dplCurrentEntries.map(r => (
+                <tr key={r.nuptk} className={`hover:bg-slate-50 dark:hover:bg-slate-800 ${r.nuptk === 'Belum Ditentukan' ? 'bg-rose-50/30 dark:bg-rose-900/20' : ''}`}>
+                  <td className={`p-3 text-xs font-semibold ${r.nuptk === 'Belum Ditentukan' ? 'text-rose-600 dark:text-rose-400' : 'text-slate-700 dark:text-slate-200'}`}>{r.nama}</td>
+                  <td className="p-3 text-xs font-bold text-slate-800 dark:text-slate-100 text-center">{r.jumlah}</td>
+                  <td className="p-3 text-xs font-bold text-emerald-600 dark:text-emerald-400 text-center">{r.laporanDisetujui}</td>
+                  <td className="p-3 text-xs font-bold text-rose-600 dark:text-rose-400 text-center">{r.perluPerhatian || '-'}</td>
+                  <td className="p-3 text-xs font-bold text-indigo-600 dark:text-indigo-400 text-center">{r.avgProgress}%</td>
                 </tr>
               ))}
-              {rekapDpl.length === 0 && (
-                <tr><td colSpan="5" className="p-6 text-center text-xs text-slate-400">Belum ada data.</td></tr>
+              {dplCurrentEntries.length === 0 && (
+                <tr><td colSpan="5" className="p-6 text-center text-xs text-slate-400 dark:text-slate-500">Tidak ada data ditemukan.</td></tr>
               )}
             </tbody>
           </table>
         </div>
+
+        {dplEntriesPerPage !== 'all' && dplTotalPages > 1 && (
+          <div className="p-3 border-t border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
+            <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 pl-1">Hal {dplCurrentPage}/{dplTotalPages} • {rekapDplFiltered.length} DPL</span>
+            <div className="flex gap-1">
+              <button onClick={() => setDplCurrentPage(p => Math.max(1, p - 1))} disabled={dplCurrentPage === 1} className="p-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg disabled:opacity-40">
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+              <button onClick={() => setDplCurrentPage(p => Math.min(dplTotalPages, p + 1))} disabled={dplCurrentPage === dplTotalPages} className="p-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg disabled:opacity-40">
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -418,55 +556,55 @@ const MahasiswaCard = ({ m, onOpenDetail }) => {
   const waMessage = mitraKosong ? buildCompleteProfileMessage(m) : (m.isAtRisk ? buildReminderMessage(m) : buildGreetingMessage(m));
   const waHref = waLink(m.wa, waMessage);
   const waLabel = mitraKosong ? 'Ingatkan Lengkapi Profil' : (m.isAtRisk ? 'Ingatkan Isi Logbook' : 'Kirim Pesan WA');
-  const waTone = mitraKosong ? 'bg-amber-500 text-white hover:bg-amber-600' : (m.isAtRisk ? 'bg-rose-600 text-white hover:bg-rose-700' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100');
+  const waTone = mitraKosong ? 'bg-amber-500 text-white hover:bg-amber-600' : (m.isAtRisk ? 'bg-rose-600 text-white hover:bg-rose-700' : 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100');
   return (
     <div
       role="button"
       tabIndex={0}
       onClick={() => onOpenDetail(m.nim)}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenDetail(m.nim); } }}
-      className="text-left bg-white p-4 rounded-2xl shadow-sm border border-slate-100 hover:border-indigo-200 hover:shadow-md transition-all w-full cursor-pointer"
+      className="text-left bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 hover:border-indigo-200 hover:shadow-md transition-all w-full cursor-pointer"
     >
       <div className="flex justify-between items-start gap-3 mb-3">
         <div className="min-w-0">
-          <h3 className="font-bold text-slate-800 truncate">{m.nama}</h3>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider truncate">{m.nim} • {m.prodi} • {m.fakultas}</p>
+          <h3 className="font-bold text-slate-800 dark:text-slate-100 truncate">{m.nama}</h3>
+          <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider truncate">{m.nim} • {m.prodi} • {m.fakultas}</p>
         </div>
         {mitraKosong ? (
-          <span className="shrink-0 flex items-center gap-1 bg-amber-50 text-amber-700 text-[9px] font-bold px-2 py-1 rounded-lg uppercase tracking-wide">
+          <span className="shrink-0 flex items-center gap-1 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[9px] font-bold px-2 py-1 rounded-lg uppercase tracking-wide">
             <AlertCircle className="w-3 h-3" /> Profil Belum Lengkap
           </span>
         ) : m.isAtRisk && (
-          <span className="shrink-0 flex items-center gap-1 bg-rose-50 text-rose-600 text-[9px] font-bold px-2 py-1 rounded-lg uppercase tracking-wide">
+          <span className="shrink-0 flex items-center gap-1 bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 text-[9px] font-bold px-2 py-1 rounded-lg uppercase tracking-wide">
             <AlertCircle className="w-3 h-3" /> Perhatian
           </span>
         )}
       </div>
-      <div className="flex items-center gap-2 text-xs text-slate-500 mb-3">
-        <MapPin className="w-3.5 h-3.5 shrink-0 text-slate-400" />
-        <span className={`truncate ${mitraKosong ? 'text-amber-600 font-semibold' : ''}`}>{m.mitra || 'Mitra belum diisi'}</span>
+      <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mb-3">
+        <MapPin className="w-3.5 h-3.5 shrink-0 text-slate-400 dark:text-slate-500" />
+        <span className={`truncate ${mitraKosong ? 'text-amber-600 dark:text-amber-400 font-semibold' : ''}`}>{m.mitra || 'Mitra belum diisi'}</span>
       </div>
       <div className="mb-3">
         <div className="flex justify-between items-baseline mb-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Progres Rekognisi</span>
-          <span className="text-xs font-black text-indigo-600">{m.progressPercentage}%</span>
+          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Progres Rekognisi</span>
+          <span className="text-xs font-black text-indigo-600 dark:text-indigo-400">{m.progressPercentage}%</span>
         </div>
-        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+        <div className="w-full h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
           <div className={`h-full rounded-full ${m.progressPercentage >= 100 ? 'bg-emerald-500' : 'bg-indigo-500'}`} style={{ width: `${m.progressPercentage}%` }} />
         </div>
-        <p className="text-[10px] font-bold text-slate-400 mt-1">{m.currentHours}/{m.targetHours} Jam</p>
+        <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-1">{m.currentHours}/{m.targetHours} Jam</p>
       </div>
       <div className="flex flex-wrap gap-1.5 mb-3">
         <span className={`text-[9px] px-2 py-1 rounded-md font-bold uppercase tracking-wider ${getStatusBadgeClass(m.statusLaporan)}`}>
           Laporan: {m.statusLaporan}
         </span>
         {m.logbookCount.pending > 0 && (
-          <span className="text-[9px] px-2 py-1 rounded-md font-bold uppercase tracking-wider bg-amber-100 text-amber-700">
+          <span className="text-[9px] px-2 py-1 rounded-md font-bold uppercase tracking-wider bg-amber-100 text-amber-700 dark:text-amber-400">
             {m.logbookCount.pending} Logbook Pending
           </span>
         )}
         {m.dokumenLengkap < 5 && (
-          <span className="text-[9px] px-2 py-1 rounded-md font-bold uppercase tracking-wider bg-slate-100 text-slate-500 flex items-center gap-1">
+          <span className="text-[9px] px-2 py-1 rounded-md font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center gap-1">
             <FileWarning className="w-3 h-3" /> Dokumen {m.dokumenLengkap}/5
           </span>
         )}
@@ -477,7 +615,7 @@ const MahasiswaCard = ({ m, onOpenDetail }) => {
           <FaWhatsapp className="w-3.5 h-3.5" /> {waLabel}
         </a>
       ) : (
-        <div className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-xs font-bold bg-slate-50 text-slate-400">
+        <div className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-xs font-bold bg-slate-50 dark:bg-slate-900 text-slate-400 dark:text-slate-500">
           <FaWhatsapp className="w-3.5 h-3.5" /> Nomor WA Belum Ada
         </div>
       )}
@@ -492,9 +630,9 @@ const DOKUMEN_LABELS = {
 
 const EditField = ({ label, value, onChange, disabled }) => (
   <div>
-    <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">{label}</label>
+    <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase block mb-1">{label}</label>
     <input value={value || ''} onChange={e => onChange(e.target.value)} disabled={disabled}
-      className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-400" />
+      className="w-full p-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 dark:bg-slate-700 disabled:text-slate-400 dark:text-slate-500" />
   </div>
 );
 
@@ -604,60 +742,60 @@ const MahasiswaDetailView = ({ nim, token, onClose, showToast }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-white flex flex-col animate-in slide-in-from-bottom-full sm:slide-in-from-right-10 duration-300">
-      <div className="bg-white px-4 sm:px-6 pt-6 pb-4 shadow-sm border-b border-slate-100 sticky top-0 z-10 flex items-center gap-3">
-        <button onClick={onClose} className="p-2 -ml-2 bg-slate-50 hover:bg-slate-100 rounded-2xl transition-colors">
-          <ChevronLeft className="w-6 h-6 text-slate-700" />
+    <div className="fixed inset-0 z-50 bg-white dark:bg-slate-800 flex flex-col animate-in slide-in-from-bottom-full sm:slide-in-from-right-10 duration-300">
+      <div className="bg-white dark:bg-slate-800 px-4 sm:px-6 pt-6 pb-4 shadow-sm border-b border-slate-100 dark:border-slate-700 sticky top-0 z-10 flex items-center gap-3">
+        <button onClick={onClose} className="p-2 -ml-2 bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-2xl transition-colors">
+          <ChevronLeft className="w-6 h-6 text-slate-700 dark:text-slate-200" />
         </button>
-        <h1 className="text-lg font-extrabold text-slate-800 tracking-tight truncate">{data?.profile?.nama || 'Detail Mahasiswa'}</h1>
+        <h1 className="text-lg font-extrabold text-slate-800 dark:text-slate-100 tracking-tight truncate">{data?.profile?.nama || 'Detail Mahasiswa'}</h1>
       </div>
 
       {isLoading && <PageLoader label="Memuat detail..." />}
       {!isLoading && error && (
         <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
           <AlertCircle className="w-10 h-10 text-rose-500 mb-3" />
-          <p className="text-sm font-bold text-slate-700 mb-1">Gagal memuat data</p>
-          <p className="text-xs text-slate-500">{error}</p>
+          <p className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-1">Gagal memuat data</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">{error}</p>
         </div>
       )}
 
       {!isLoading && !error && data && (
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 pb-10">
-          <div className="bg-white p-5 rounded-[2rem] shadow-sm border border-slate-100">
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-700">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wide">Identitas & Penugasan</h2>
+              <h2 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Identitas & Penugasan</h2>
               {!editingIdentitas ? (
-                <button onClick={() => setEditingIdentitas(true)} className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg"><Pencil className="w-3.5 h-3.5" /></button>
+                <button onClick={() => setEditingIdentitas(true)} className="p-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg"><Pencil className="w-3.5 h-3.5" /></button>
               ) : (
-                <button onClick={() => { setEditingIdentitas(false); setIdentitasForm({ nama: data.profile.nama, wa: data.profile.wa, email: data.profile.email, prodi: data.profile.prodi, fakultas: data.profile.fakultas }); }} className="p-1.5 bg-slate-100 text-slate-500 rounded-lg"><X className="w-3.5 h-3.5" /></button>
+                <button onClick={() => { setEditingIdentitas(false); setIdentitasForm({ nama: data.profile.nama, wa: data.profile.wa, email: data.profile.email, prodi: data.profile.prodi, fakultas: data.profile.fakultas }); }} className="p-1.5 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-lg"><X className="w-3.5 h-3.5" /></button>
               )}
             </div>
 
             {!editingIdentitas ? (
               <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                <div><p className="text-[10px] font-bold text-slate-400 uppercase">NIM</p><p className="font-semibold text-slate-800">{data.profile.nim}</p></div>
-                <div><p className="text-[10px] font-bold text-slate-400 uppercase">Fakultas</p><p className="font-semibold text-slate-800">{data.profile.fakultas}</p></div>
-                <div><p className="text-[10px] font-bold text-slate-400 uppercase">Prodi</p><p className="font-semibold text-slate-800">{data.profile.prodi}</p></div>
-                <div><p className="text-[10px] font-bold text-slate-400 uppercase">Email</p><p className="font-semibold text-slate-800 truncate">{data.profile.email || '-'}</p></div>
-                <div><p className="text-[10px] font-bold text-slate-400 uppercase">WhatsApp</p>
-                  {data.profile.wa ? <a href={waLink(data.profile.wa)} target="_blank" rel="noreferrer" className="font-semibold text-emerald-600 flex items-center gap-1"><FaWhatsapp /> {data.profile.wa}</a> : <p className="font-semibold text-slate-400">-</p>}
+                <div><p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">NIM</p><p className="font-semibold text-slate-800 dark:text-slate-100">{data.profile.nim}</p></div>
+                <div><p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Fakultas</p><p className="font-semibold text-slate-800 dark:text-slate-100">{data.profile.fakultas}</p></div>
+                <div><p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Prodi</p><p className="font-semibold text-slate-800 dark:text-slate-100">{data.profile.prodi}</p></div>
+                <div><p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Email</p><p className="font-semibold text-slate-800 dark:text-slate-100 truncate">{data.profile.email || '-'}</p></div>
+                <div><p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">WhatsApp</p>
+                  {data.profile.wa ? <a href={waLink(data.profile.wa)} target="_blank" rel="noreferrer" className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1"><FaWhatsapp /> {data.profile.wa}</a> : <p className="font-semibold text-slate-400 dark:text-slate-500">-</p>}
                 </div>
-                <div><p className="text-[10px] font-bold text-slate-400 uppercase">Jenis Program</p><p className="font-semibold text-slate-800">{data.profile.jenisProgram || '-'}</p></div>
-                <div className="col-span-2"><p className="text-[10px] font-bold text-slate-400 uppercase">Mitra</p><p className="font-semibold text-slate-800">{data.profile.mitra || '-'}</p></div>
-                <div><p className="text-[10px] font-bold text-slate-400 uppercase">Mulai Tugas</p><p className="font-semibold text-slate-800">{formatDateIndoShort(data.profile.tglAwal)}</p></div>
-                <div><p className="text-[10px] font-bold text-slate-400 uppercase">Selesai Tugas</p><p className="font-semibold text-slate-800">{formatDateIndoShort(data.profile.tglAkhir)}</p></div>
+                <div><p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Jenis Program</p><p className="font-semibold text-slate-800 dark:text-slate-100">{data.profile.jenisProgram || '-'}</p></div>
+                <div className="col-span-2"><p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Mitra</p><p className="font-semibold text-slate-800 dark:text-slate-100">{data.profile.mitra || '-'}</p></div>
+                <div><p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Mulai Tugas</p><p className="font-semibold text-slate-800 dark:text-slate-100">{formatDateIndoShort(data.profile.tglAwal)}</p></div>
+                <div><p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Selesai Tugas</p><p className="font-semibold text-slate-800 dark:text-slate-100">{formatDateIndoShort(data.profile.tglAkhir)}</p></div>
               </div>
             ) : (
-              <div className="space-y-3 bg-slate-50 p-3 rounded-xl">
+              <div className="space-y-3 bg-slate-50 dark:bg-slate-900 p-3 rounded-xl">
                 <div className="grid grid-cols-1 gap-3">
                   <EditField label="NIM (tidak bisa diubah)" value={data.profile.nim} disabled />
                   <EditField label="Nama" value={identitasForm.nama} onChange={v => setIdentitasForm(f => ({ ...f, nama: v }))} />
                   <EditField label="WhatsApp" value={identitasForm.wa} onChange={v => setIdentitasForm(f => ({ ...f, wa: v }))} />
                   <EditField label="Email" value={identitasForm.email} onChange={v => setIdentitasForm(f => ({ ...f, email: v }))} />
                   <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Fakultas</label>
+                    <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase block mb-1">Fakultas</label>
                     <select value={identitasForm.fakultas || ''} onChange={e => setIdentitasForm(f => ({ ...f, fakultas: e.target.value }))}
-                      className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+                      className="w-full p-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500">
                       <option value="">Pilih Fakultas...</option>
                       {masterData.fakultas.map((f, i) => {
                         const namaF = typeof f === 'string' ? f : f.NamaFakultas;
@@ -666,9 +804,9 @@ const MahasiswaDetailView = ({ nim, token, onClose, showToast }) => {
                     </select>
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Prodi</label>
+                    <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase block mb-1">Prodi</label>
                     <select value={identitasForm.prodi || ''} onChange={e => setIdentitasForm(f => ({ ...f, prodi: e.target.value }))}
-                      className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+                      className="w-full p-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500">
                       <option value="">Pilih Prodi...</option>
                       {masterData.prodi.map((p, i) => {
                         const namaP = p.nama || p.NamaProdi;
@@ -684,18 +822,18 @@ const MahasiswaDetailView = ({ nim, token, onClose, showToast }) => {
               </div>
             )}
 
-            <div className="mt-4 pt-4 border-t border-slate-100">
+            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
               {!resetResult ? (
                 <button onClick={handleResetPassword} disabled={isResetting}
-                  className="w-full py-2.5 bg-rose-50 text-rose-600 rounded-xl text-xs font-bold flex items-center justify-center gap-2 disabled:opacity-70">
+                  className="w-full py-2.5 bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 rounded-xl text-xs font-bold flex items-center justify-center gap-2 disabled:opacity-70">
                   {isResetting ? <><ButtonSpinner /> Mereset...</> : <><KeyRound className="w-3.5 h-3.5" /> Reset Kata Sandi</>}
                 </button>
               ) : (
-                <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-xl">
-                  <p className="text-[10px] font-bold text-emerald-700 uppercase mb-1.5">Kata sandi baru (hanya tampil sekali):</p>
-                  <p className="text-sm font-mono font-bold text-slate-800 mb-2">{resetResult}</p>
+                <div className="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-100 dark:border-emerald-800/50 p-3 rounded-xl">
+                  <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase mb-1.5">Kata sandi baru (hanya tampil sekali):</p>
+                  <p className="text-sm font-mono font-bold text-slate-800 dark:text-slate-100 mb-2">{resetResult}</p>
                   <div className="flex gap-2">
-                    <button onClick={copyResetPassword} className="flex-1 flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-700 bg-white px-3 py-1.5 rounded-lg border border-emerald-200">
+                    <button onClick={copyResetPassword} className="flex-1 flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-lg border border-emerald-200">
                       {resetCopied ? <><Check className="w-3.5 h-3.5" /> Tersalin</> : <><Copy className="w-3.5 h-3.5" /> Salin</>}
                     </button>
                     {data.profile.wa && (
@@ -710,25 +848,25 @@ const MahasiswaDetailView = ({ nim, token, onClose, showToast }) => {
             </div>
           </div>
 
-          <div className="bg-white p-5 rounded-[2rem] shadow-sm border border-slate-100">
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-700">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wide">Mentor & DPL</h2>
+              <h2 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Mentor & DPL</h2>
             </div>
             <div className="space-y-3">
-              <div className="bg-slate-50 p-3 rounded-xl">
+              <div className="bg-slate-50 dark:bg-slate-900 p-3 rounded-xl">
                 <div className="flex items-center justify-between mb-1">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase">Mentor</p>
+                  <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Mentor</p>
                   <div className="flex items-center gap-1.5">
                     {data.profile.mentorWa && !editingMentor && <a href={waLink(data.profile.mentorWa)} target="_blank" rel="noreferrer" className="p-1.5 bg-emerald-500 text-white rounded-lg"><FaWhatsapp className="w-3 h-3" /></a>}
                     {data.profile.mentorEmail && (
                       editingMentor
-                        ? <button onClick={() => setEditingMentor(false)} className="p-1.5 bg-slate-100 text-slate-500 rounded-lg"><X className="w-3 h-3" /></button>
-                        : <button onClick={() => setEditingMentor(true)} className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg"><Pencil className="w-3 h-3" /></button>
+                        ? <button onClick={() => setEditingMentor(false)} className="p-1.5 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-lg"><X className="w-3 h-3" /></button>
+                        : <button onClick={() => setEditingMentor(true)} className="p-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg"><Pencil className="w-3 h-3" /></button>
                     )}
                   </div>
                 </div>
                 {!editingMentor ? (
-                  <p className="font-semibold text-slate-800 text-sm truncate">{data.profile.mentorNama || 'Belum diisi'}</p>
+                  <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm truncate">{data.profile.mentorNama || 'Belum diisi'}</p>
                 ) : (
                   <div className="space-y-2 mt-2">
                     <EditField label="Nama" value={mentorForm.nama} onChange={v => setMentorForm(f => ({ ...f, nama: v }))} />
@@ -742,20 +880,20 @@ const MahasiswaDetailView = ({ nim, token, onClose, showToast }) => {
                 )}
               </div>
 
-              <div className="bg-slate-50 p-3 rounded-xl">
+              <div className="bg-slate-50 dark:bg-slate-900 p-3 rounded-xl">
                 <div className="flex items-center justify-between mb-1">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase">DPL</p>
+                  <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">DPL</p>
                   <div className="flex items-center gap-1.5">
                     {data.profile.dplWa && !editingDpl && <a href={waLink(data.profile.dplWa)} target="_blank" rel="noreferrer" className="p-1.5 bg-emerald-500 text-white rounded-lg"><FaWhatsapp className="w-3 h-3" /></a>}
                     {data.profile.dplNuptk && (
                       editingDpl
-                        ? <button onClick={() => setEditingDpl(false)} className="p-1.5 bg-slate-100 text-slate-500 rounded-lg"><X className="w-3 h-3" /></button>
-                        : <button onClick={() => setEditingDpl(true)} className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg"><Pencil className="w-3 h-3" /></button>
+                        ? <button onClick={() => setEditingDpl(false)} className="p-1.5 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-lg"><X className="w-3 h-3" /></button>
+                        : <button onClick={() => setEditingDpl(true)} className="p-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg"><Pencil className="w-3 h-3" /></button>
                     )}
                   </div>
                 </div>
                 {!editingDpl ? (
-                  <p className="font-semibold text-slate-800 text-sm truncate">{data.profile.dplNama || 'Belum diisi'}</p>
+                  <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm truncate">{data.profile.dplNama || 'Belum diisi'}</p>
                 ) : (
                   <div className="space-y-2 mt-2">
                     <EditField label="Nama & Gelar" value={dplForm.nama} onChange={v => setDplForm(f => ({ ...f, nama: v }))} />
@@ -771,69 +909,69 @@ const MahasiswaDetailView = ({ nim, token, onClose, showToast }) => {
             </div>
           </div>
 
-          <div className="bg-white p-5 rounded-[2rem] shadow-sm border border-slate-100">
-            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Progres per Matakuliah</h2>
-            {data.mkProgress.length === 0 ? <p className="text-sm text-slate-400 text-center py-4">Belum ada matakuliah direkognisi.</p> : (
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-700">
+            <h2 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-3">Progres per Matakuliah</h2>
+            {data.mkProgress.length === 0 ? <p className="text-sm text-slate-400 dark:text-slate-500 text-center py-4">Belum ada matakuliah direkognisi.</p> : (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {data.mkProgress.map(mk => (
-                  <div key={mk.id} className="bg-slate-50 p-3 rounded-2xl flex flex-col items-center text-center">
+                  <div key={mk.id} className="bg-slate-50 dark:bg-slate-900 p-3 rounded-2xl flex flex-col items-center text-center">
                     <div className="relative w-14 h-14 mb-2">
                       <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
                         <path strokeDasharray="100,100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#E2E8F0" strokeWidth="3.5" />
                         <path strokeDasharray={`${mk.percentage},100`} d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke={mk.percentage === 100 ? '#10B981' : '#6366F1'} strokeWidth="3.5" strokeLinecap="round" />
                       </svg>
-                      <div className="absolute inset-0 flex items-center justify-center text-xs font-black text-slate-700">{mk.percentage}%</div>
+                      <div className="absolute inset-0 flex items-center justify-center text-xs font-black text-slate-700 dark:text-slate-200">{mk.percentage}%</div>
                     </div>
-                    <p className="text-[10px] font-bold text-slate-700 line-clamp-2 leading-tight">{mk.nama}</p>
-                    <p className="text-[9px] font-bold text-slate-400 mt-1">{mk.currentHours}/{mk.targetHours} Jam</p>
+                    <p className="text-[10px] font-bold text-slate-700 dark:text-slate-200 line-clamp-2 leading-tight">{mk.nama}</p>
+                    <p className="text-[9px] font-bold text-slate-400 dark:text-slate-500 mt-1">{mk.currentHours}/{mk.targetHours} Jam</p>
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          <div className="bg-white p-5 rounded-[2rem] shadow-sm border border-slate-100">
-            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Dokumen Pendukung</h2>
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-700">
+            <h2 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-3">Dokumen Pendukung</h2>
             <div className="space-y-2">
               {Object.keys(DOKUMEN_LABELS).map(key => {
                 const link = data.profile.dokumen ? data.profile.dokumen[key] : '';
                 return (
-                  <div key={key} className="flex items-center justify-between bg-slate-50 p-3 rounded-xl">
-                    <span className="text-xs font-semibold text-slate-700">{DOKUMEN_LABELS[key]}</span>
-                    {link ? <a href={link} target="_blank" rel="noreferrer" className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg">Lihat</a> : <span className="text-[10px] font-bold text-rose-500 bg-rose-50 px-2.5 py-1 rounded-lg">Belum ada</span>}
+                  <div key={key} className="flex items-center justify-between bg-slate-50 dark:bg-slate-900 p-3 rounded-xl">
+                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">{DOKUMEN_LABELS[key]}</span>
+                    {link ? <a href={link} target="_blank" rel="noreferrer" className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2.5 py-1 rounded-lg">Lihat</a> : <span className="text-[10px] font-bold text-rose-500 bg-rose-50 dark:bg-rose-900/30 px-2.5 py-1 rounded-lg">Belum ada</span>}
                   </div>
                 );
               })}
             </div>
           </div>
 
-          <div className="bg-white p-5 rounded-[2rem] shadow-sm border border-slate-100">
-            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Laporan Akhir</h2>
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-700">
+            <h2 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-3">Laporan Akhir</h2>
             {data.laporan ? (
-              <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl">
+              <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-900 p-3 rounded-xl">
                 <div className="min-w-0">
                   <span className={`text-[9px] px-2 py-1 rounded-md font-bold uppercase tracking-wider ${getStatusBadgeClass(data.laporan.status)}`}>{data.laporan.status}</span>
-                  <p className="text-xs font-semibold text-slate-700 mt-1 truncate">{data.laporan.fileName}</p>
+                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 mt-1 truncate">{data.laporan.fileName}</p>
                 </div>
-                {data.laporan.fileLink && <a href={data.laporan.fileLink} target="_blank" rel="noreferrer" className="shrink-0 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg">Buka</a>}
+                {data.laporan.fileLink && <a href={data.laporan.fileLink} target="_blank" rel="noreferrer" className="shrink-0 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-lg">Buka</a>}
               </div>
-            ) : <p className="text-sm text-slate-400 text-center py-4">Belum disubmit.</p>}
+            ) : <p className="text-sm text-slate-400 dark:text-slate-500 text-center py-4">Belum disubmit.</p>}
           </div>
 
-          <div className="bg-white p-5 rounded-[2rem] shadow-sm border border-slate-100">
-            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Riwayat Logbook ({data.logbooks.length})</h2>
-            {data.logbooks.length === 0 ? <p className="text-sm text-slate-400 text-center py-4">Belum ada aktivitas.</p> : (
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-700">
+            <h2 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-3">Riwayat Logbook ({data.logbooks.length})</h2>
+            {data.logbooks.length === 0 ? <p className="text-sm text-slate-400 dark:text-slate-500 text-center py-4">Belum ada aktivitas.</p> : (
               <div className="space-y-3">
                 {data.logbooks.map(lb => (
-                  <div key={lb.id} className="bg-slate-50 p-3 rounded-xl">
+                  <div key={lb.id} className="bg-slate-50 dark:bg-slate-900 p-3 rounded-xl">
                     <div className="flex justify-between items-start mb-1.5">
                       <span className={`text-[9px] px-2 py-1 rounded-md font-bold uppercase tracking-wider ${getStatusBadgeClass(lb.status)}`}>{lb.status}</span>
-                      <span className="text-[10px] font-bold text-slate-400">{formatDateIndoShort(lb.tanggal)} • {lb.durasi} Jam</span>
+                      <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500">{formatDateIndoShort(lb.tanggal)} • {lb.durasi} Jam</span>
                     </div>
-                    <p className="text-xs font-bold text-slate-700">{lb.kegiatan.join(', ')}</p>
-                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">{lb.deskripsi}</p>
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-200">{lb.kegiatan.join(', ')}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">{lb.deskripsi}</p>
                     {lb.status.includes('Revisi') && lb.catatanRevisi && (
-                      <p className="text-[10px] text-rose-600 font-semibold mt-2 bg-rose-50 p-2 rounded-lg">Catatan: {lb.catatanRevisi}</p>
+                      <p className="text-[10px] text-rose-600 dark:text-rose-400 font-semibold mt-2 bg-rose-50 dark:bg-rose-900/30 p-2 rounded-lg">Catatan: {lb.catatanRevisi}</p>
                     )}
                   </div>
                 ))}
@@ -973,23 +1111,23 @@ const MahasiswaTab = ({ token, showToast }) => {
     }
   };
 
-  if (isLoading && mahasiswaList.length === 0) return <div className="py-16"><Loader2 className="w-8 h-8 text-indigo-600 animate-spin mx-auto" /></div>;
+  if (isLoading && mahasiswaList.length === 0) return <div className="py-16"><Loader2 className="w-8 h-8 text-indigo-600 dark:text-indigo-400 animate-spin mx-auto" /></div>;
   if (error) return (
-    <div className="bg-white p-8 rounded-2xl text-center border border-slate-100">
+    <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl text-center border border-slate-100 dark:border-slate-700">
       <AlertCircle className="w-8 h-8 text-rose-500 mx-auto mb-2" />
-      <p className="text-sm font-bold text-slate-700 mb-3">{error}</p>
+      <p className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-3">{error}</p>
       <button onClick={loadData} className="px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-xl">Coba Lagi</button>
     </div>
   );
 
   return (
     <div className="space-y-4">
-      <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-3">
+      <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col gap-3">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+          <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 dark:text-slate-500" />
           <input type="text" placeholder="Cari nama, NIM, atau mitra..." value={searchTerm}
             onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-            className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+            className="w-full pl-9 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
         </div>
         <div className="flex flex-wrap gap-2">
           <div className="relative">
@@ -1002,41 +1140,41 @@ const MahasiswaTab = ({ token, showToast }) => {
           </div>
           <div className="relative">
             <select value={selectedFakultas} onChange={e => { setSelectedFakultas(e.target.value); setCurrentPage(1); }}
-              className="appearance-none pl-3 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none cursor-pointer max-w-[180px]">
+              className="appearance-none pl-3 pr-8 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-xs font-bold outline-none cursor-pointer max-w-[180px]">
               <option value="semua">Semua Fakultas</option>
               {fakultasOptions.map(f => <option key={f} value={f}>{f}</option>)}
             </select>
-            <Building2 className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Building2 className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
           <div className="relative">
             <select value={selectedProdi} onChange={e => { setSelectedProdi(e.target.value); setCurrentPage(1); }}
-              className="appearance-none pl-3 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none cursor-pointer max-w-[180px]">
+              className="appearance-none pl-3 pr-8 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-xs font-bold outline-none cursor-pointer max-w-[180px]">
               <option value="semua">Semua Prodi</option>
               {prodiOptionsForFakultas.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
-            <GraduationCap className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <GraduationCap className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
           <div className="relative">
             <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-              className="appearance-none pl-3 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none cursor-pointer">
+              className="appearance-none pl-3 pr-8 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-xs font-bold outline-none cursor-pointer">
               <option value="semua">Semua Status Laporan</option>
               <option value="Disetujui">Disetujui</option>
               <option value="Menunggu Persetujuan Mentor">Menunggu Mentor</option>
               <option value="Menunggu Persetujuan DPL">Menunggu DPL</option>
               <option value="Belum Disubmit">Belum Disubmit</option>
             </select>
-            <Filter className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Filter className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
           <button onClick={() => { setOnlyAtRisk(v => !v); setCurrentPage(1); }}
-            className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 ${onlyAtRisk ? 'bg-rose-600 text-white' : 'bg-slate-50 border border-slate-200 text-slate-600'}`}>
+            className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 ${onlyAtRisk ? 'bg-rose-600 text-white' : 'bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300'}`}>
             <AlertCircle className="w-3.5 h-3.5" /> Perlu Perhatian {onlyAtRisk && <X className="w-3 h-3" />}
           </button>
           <button onClick={() => { setOnlyMitraKosong(v => !v); setCurrentPage(1); }}
-            className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 ${onlyMitraKosong ? 'bg-amber-500 text-white' : 'bg-slate-50 border border-slate-200 text-slate-600'}`}>
+            className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 ${onlyMitraKosong ? 'bg-amber-500 text-white' : 'bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300'}`}>
             <FileWarning className="w-3.5 h-3.5" /> Mitra Belum Diisi {onlyMitraKosong && <X className="w-3 h-3" />}
           </button>
           <button onClick={loadData} disabled={isLoading} title="Muat ulang data terbaru"
-            className="p-2 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl disabled:opacity-50">
+            className="p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-xl disabled:opacity-50">
             {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
           </button>
           <button onClick={handleExportExcel} disabled={isExporting || filteredData.length === 0}
@@ -1047,9 +1185,9 @@ const MahasiswaTab = ({ token, showToast }) => {
       </div>
 
       {currentEntries.length === 0 ? (
-        <div className="bg-white p-10 rounded-[2rem] text-center border border-slate-100 shadow-sm">
+        <div className="bg-white dark:bg-slate-800 p-10 rounded-[2rem] text-center border border-slate-100 dark:border-slate-700 shadow-sm">
           <Users className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-          <p className="text-sm font-bold text-slate-700">Tidak ada data ditemukan.</p>
+          <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Tidak ada data ditemukan.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -1058,11 +1196,11 @@ const MahasiswaTab = ({ token, showToast }) => {
       )}
 
       {totalPages > 1 && (
-        <div className="flex justify-between items-center bg-white p-3 rounded-2xl border border-slate-100 shadow-sm">
-          <span className="text-xs font-medium text-slate-500 pl-2">Hal {currentPage}/{totalPages} • {filteredData.length} data</span>
+        <div className="flex justify-between items-center bg-white dark:bg-slate-800 p-3 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm">
+          <span className="text-xs font-medium text-slate-500 dark:text-slate-400 pl-2">Hal {currentPage}/{totalPages} • {filteredData.length} data</span>
           <div className="flex gap-1">
-            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-2 bg-slate-50 rounded-lg disabled:opacity-40"><ChevronLeft className="w-4 h-4" /></button>
-            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-2 bg-slate-50 rounded-lg disabled:opacity-40"><ChevronRight className="w-4 h-4" /></button>
+            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-2 bg-slate-50 dark:bg-slate-900 rounded-lg disabled:opacity-40"><ChevronLeft className="w-4 h-4" /></button>
+            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-2 bg-slate-50 dark:bg-slate-900 rounded-lg disabled:opacity-40"><ChevronRight className="w-4 h-4" /></button>
           </div>
         </div>
       )}
@@ -1187,31 +1325,31 @@ const MasterDataTab = ({ token, showToast }) => {
   // blank-kan seluruh tab, cukup ikon spinner kecil di tombol refresh
   // (lihat prop disabled/isLoading pada tombolnya di bawah).
   if (isLoading && fakultasList.length === 0 && prodiList.length === 0) {
-    return <div className="py-16"><Loader2 className="w-8 h-8 text-indigo-600 animate-spin mx-auto" /></div>;
+    return <div className="py-16"><Loader2 className="w-8 h-8 text-indigo-600 dark:text-indigo-400 animate-spin mx-auto" /></div>;
   }
 
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
-        <div className="bg-white rounded-2xl shadow-sm p-1 flex gap-1 border border-slate-100 flex-1">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-1 flex gap-1 border border-slate-100 dark:border-slate-700 flex-1">
           {[['fakultas', 'Fakultas', Building2], ['prodi', 'Program Studi', GraduationCap], ['tahunajaran', 'Tahun Ajaran', BookOpen]].map(([key, label, Icon]) => (
             <button key={key} onClick={() => setSubTab(key)}
-              className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${subTab === key ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>
+              className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${subTab === key ? 'bg-slate-900 text-white' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
               <Icon className="w-3.5 h-3.5" /> {label}
             </button>
           ))}
         </div>
         <button onClick={load} disabled={isLoading} title="Muat ulang data terbaru"
-          className="p-2 bg-white border border-slate-100 shadow-sm text-slate-600 rounded-2xl disabled:opacity-50 shrink-0">
+          className="p-2 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm text-slate-600 dark:text-slate-300 rounded-2xl disabled:opacity-50 shrink-0">
           {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
         </button>
       </div>
 
       {subTab === 'fakultas' && (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-4">
           <div className="flex gap-2 mb-4">
             <input value={newFakultas} onChange={e => setNewFakultas(e.target.value)} placeholder="Nama fakultas baru..."
-              className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
+              className="flex-1 p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
             <button onClick={handleAddFakultas} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5"><Plus className="w-4 h-4" /> Tambah</button>
           </div>
           <div className="space-y-2">
@@ -1219,10 +1357,10 @@ const MasterDataTab = ({ token, showToast }) => {
               const nama = typeof f === 'string' ? f : f.NamaFakultas;
               const id = typeof f === 'string' ? null : f.ID;
               return (
-                <div key={id || i} className="flex items-center justify-between bg-slate-50 p-3 rounded-xl">
-                  <span className="text-sm font-semibold text-slate-700">{nama}</span>
+                <div key={id || i} className="flex items-center justify-between bg-slate-50 dark:bg-slate-900 p-3 rounded-xl">
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{nama}</span>
                   {id && (
-                    <button onClick={() => handleDeleteFakultas(id)} disabled={busyId === id} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg disabled:opacity-50">
+                    <button onClick={() => handleDeleteFakultas(id)} disabled={busyId === id} className="p-2 text-rose-500 hover:bg-rose-50 dark:bg-rose-900/30 rounded-lg disabled:opacity-50">
                       {busyId === id ? <ButtonSpinner /> : <Trash2 className="w-4 h-4" />}
                     </button>
                   )}
@@ -1230,17 +1368,17 @@ const MasterDataTab = ({ token, showToast }) => {
               );
             })}
           </div>
-          <p className="text-[10px] text-slate-400 mt-3 leading-relaxed">Catatan: daftar ini gabungan data lama (hardcode) dan yang ditambahkan lewat sini. Fakultas hasil tambahan baru punya tombol hapus; yang lama perlu dirapikan manual di tabel "Fakultas" kalau ingin seragam.</p>
+          <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-3 leading-relaxed">Catatan: daftar ini gabungan data lama (hardcode) dan yang ditambahkan lewat sini. Fakultas hasil tambahan baru punya tombol hapus; yang lama perlu dirapikan manual di tabel "Fakultas" kalau ingin seragam.</p>
         </div>
       )}
 
       {subTab === 'prodi' && (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-4">
           <div className="flex flex-col sm:flex-row gap-2 mb-4">
             <input value={newProdiNama} onChange={e => setNewProdiNama(e.target.value)} placeholder="Nama prodi baru..."
-              className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
+              className="flex-1 p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
             <select value={newProdiFakultas} onChange={e => setNewProdiFakultas(e.target.value)}
-              className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+              className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500">
               <option value="">Pilih Fakultas Induk...</option>
               {(Array.isArray(fakultasList) ? fakultasList : []).map((f, i) => {
                 const nama = typeof f === 'string' ? f : f.NamaFakultas;
@@ -1255,10 +1393,10 @@ const MasterDataTab = ({ token, showToast }) => {
               const fakultas = p.fakultas || p.NamaFakultas;
               const id = p.ID;
               return (
-                <div key={id || i} className="flex items-center justify-between bg-slate-50 p-3 rounded-xl">
-                  <div className="min-w-0"><p className="text-sm font-semibold text-slate-700 truncate">{nama}</p><p className="text-[10px] text-slate-400 truncate">{fakultas}</p></div>
+                <div key={id || i} className="flex items-center justify-between bg-slate-50 dark:bg-slate-900 p-3 rounded-xl">
+                  <div className="min-w-0"><p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{nama}</p><p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">{fakultas}</p></div>
                   {id && (
-                    <button onClick={() => handleDeleteProdi(id)} disabled={busyId === id} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg disabled:opacity-50 shrink-0">
+                    <button onClick={() => handleDeleteProdi(id)} disabled={busyId === id} className="p-2 text-rose-500 hover:bg-rose-50 dark:bg-rose-900/30 rounded-lg disabled:opacity-50 shrink-0">
                       {busyId === id ? <ButtonSpinner /> : <Trash2 className="w-4 h-4" />}
                     </button>
                   )}
@@ -1270,26 +1408,26 @@ const MasterDataTab = ({ token, showToast }) => {
       )}
 
       {subTab === 'tahunajaran' && (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-4">
           <div className="flex gap-2 mb-4">
             <input value={newTahunAjaran} onChange={e => setNewTahunAjaran(e.target.value)} placeholder="Cth: TA 2026/2027 Ganjil"
-              className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
+              className="flex-1 p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
             <button onClick={handleAddTahunAjaran} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5"><Plus className="w-4 h-4" /> Tambah</button>
           </div>
           <div className="space-y-2">
             {tahunAjaranList.map(t => (
-              <div key={t.id} className="flex items-center justify-between bg-slate-50 p-3 rounded-xl">
+              <div key={t.id} className="flex items-center justify-between bg-slate-50 dark:bg-slate-900 p-3 rounded-xl">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-sm font-semibold text-slate-700 truncate">{t.label}</span>
-                  {t.aktif && <span className="text-[9px] font-bold uppercase bg-emerald-100 text-emerald-700 px-2 py-1 rounded-lg shrink-0">Aktif</span>}
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{t.label}</span>
+                  {t.aktif && <span className="text-[9px] font-bold uppercase bg-emerald-100 text-emerald-700 dark:text-emerald-400 px-2 py-1 rounded-lg shrink-0">Aktif</span>}
                 </div>
                 <div className="flex gap-1.5 shrink-0">
                   {!t.aktif && (
-                    <button onClick={() => handleSetAktif(t.id)} disabled={busyId === t.id} className="px-3 py-1.5 bg-indigo-50 text-indigo-600 text-[10px] font-bold rounded-lg disabled:opacity-50">
+                    <button onClick={() => handleSetAktif(t.id)} disabled={busyId === t.id} className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold rounded-lg disabled:opacity-50">
                       {busyId === t.id ? <ButtonSpinner /> : 'Jadikan Aktif'}
                     </button>
                   )}
-                  <button onClick={() => handleDeleteTahunAjaran(t.id)} disabled={busyId === t.id} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg disabled:opacity-50">
+                  <button onClick={() => handleDeleteTahunAjaran(t.id)} disabled={busyId === t.id} className="p-2 text-rose-500 hover:bg-rose-50 dark:bg-rose-900/30 rounded-lg disabled:opacity-50">
                     {busyId === t.id ? <ButtonSpinner /> : <Trash2 className="w-4 h-4" />}
                   </button>
                 </div>
@@ -1361,20 +1499,20 @@ const AksesRow = ({ a, token, busyId, onRevoke, onReload, showToast }) => {
     <div className="p-4">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-slate-800 truncate">{a.nama}</p>
-          <p className="text-[10px] text-slate-400 truncate">
+          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{a.nama}</p>
+          <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">
             <span className={`font-bold uppercase ${a.role === 'koprodi' ? 'text-indigo-500' : 'text-emerald-500'}`}>{a.role === 'koprodi' ? 'Koprodi' : 'Admin Fakultas'}</span> • {a.scope}
           </p>
         </div>
         <div className="flex gap-1.5 shrink-0">
           {!a.wa && !isEditingWa && (
-            <button onClick={() => setIsEditingWa(true)} className="px-3 py-1.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded-lg flex items-center gap-1">
+            <button onClick={() => setIsEditingWa(true)} className="px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold rounded-lg flex items-center gap-1">
               <FaWhatsapp className="w-3 h-3" /> Kirim WA
             </button>
           )}
           {a.wa && !revealLink && (
             <button onClick={handleFetchLink} disabled={isFetchingLink}
-              className="px-3 py-1.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded-lg disabled:opacity-40 flex items-center gap-1">
+              className="px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold rounded-lg disabled:opacity-40 flex items-center gap-1">
               {isFetchingLink ? <ButtonSpinner /> : <><FaWhatsapp className="w-3 h-3" /> Kirim WA</>}
             </button>
           )}
@@ -1385,7 +1523,7 @@ const AksesRow = ({ a, token, busyId, onRevoke, onReload, showToast }) => {
             </a>
           )}
           <button onClick={() => onRevoke(a.id, a.nama)} disabled={busyId === a.id}
-            className="px-3 py-1.5 bg-rose-50 text-rose-600 text-[10px] font-bold rounded-lg disabled:opacity-50 flex items-center gap-1">
+            className="px-3 py-1.5 bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 text-[10px] font-bold rounded-lg disabled:opacity-50 flex items-center gap-1">
             {busyId === a.id ? <ButtonSpinner /> : <><Trash2 className="w-3 h-3" /> Cabut</>}
           </button>
         </div>
@@ -1394,16 +1532,192 @@ const AksesRow = ({ a, token, busyId, onRevoke, onReload, showToast }) => {
       {isEditingWa && (
         <div className="mt-3 flex gap-2">
           <input value={waInput} onChange={e => setWaInput(e.target.value)} placeholder="628... (nomor WhatsApp)" autoFocus
-            className="flex-1 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
+            className="flex-1 p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
           <button onClick={handleSaveWaAndSend} disabled={isSavingWa}
             className="px-4 py-2 bg-emerald-500 text-white text-xs font-bold rounded-xl disabled:opacity-70 flex items-center gap-1.5 shrink-0">
             {isSavingWa ? <ButtonSpinner /> : <><Check className="w-3.5 h-3.5" /> Simpan & Kirim</>}
           </button>
-          <button onClick={() => { setIsEditingWa(false); setWaInput(''); }} className="p-2 text-slate-400 hover:bg-slate-100 rounded-xl shrink-0">
+          <button onClick={() => { setIsEditingWa(false); setWaInput(''); }} className="p-2 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl shrink-0">
             <X className="w-4 h-4" />
           </button>
         </div>
       )}
+    </div>
+  );
+};
+
+// =====================================================================
+// TAB: MANAJEMEN DPL -- edit WA/Email + kirim ulang link reviewer.
+//
+// Lihat catatan penting di handleSuperAdminGetDplReviewerLink_ (backend):
+// "Kirim WA" di sini mengirim ULANG link yang SUDAH ADA (deterministik
+// terhadap NUPTK), BUKAN token baru -- link lama tetap tidak berubah.
+// =====================================================================
+const DplRow = ({ d, token, onSaved, showToast }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [waInput, setWaInput] = useState(d.wa || '');
+  const [emailInput, setEmailInput] = useState(d.email || '');
+  const [isSaving, setIsSaving] = useState(false);
+  const [isFetchingLink, setIsFetchingLink] = useState(false);
+  const [isRotating, setIsRotating] = useState(false);
+  const [revealLink, setRevealLink] = useState('');
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await api.superAdminUpdateDosen(token, { nuptk: d.nuptk, wa: waInput.trim(), email: emailInput.trim() });
+      showToast('Data DPL berhasil disimpan.');
+      setIsEditing(false);
+      onSaved();
+    } catch (err) {
+      showToast(err.message || 'Gagal menyimpan.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleFetchLink = async () => {
+    setIsFetchingLink(true);
+    try {
+      const result = await api.superAdminGetDplReviewerLink(token, d.nuptk);
+      setRevealLink(result.link);
+    } catch (err) {
+      showToast(err.message || 'Gagal mengambil link.', 'error');
+    } finally {
+      setIsFetchingLink(false);
+    }
+  };
+
+  // Destruktif -- mencabut SEMUA link lama DPL ini. Minta konfirmasi
+  // eksplisit dulu supaya tidak tertekan tidak sengaja.
+  const handleRotate = async () => {
+    if (!window.confirm(`Ganti token ${d.nama}? Semua link reviewer LAMA milik DPL ini (yang mungkin sudah pernah dikirim sebelumnya) akan langsung berhenti berfungsi, digantikan link baru.`)) {
+      return;
+    }
+    setIsRotating(true);
+    try {
+      const result = await api.superAdminRotateDplToken(token, d.nuptk);
+      setRevealLink(result.link);
+      showToast('Token berhasil diganti. Link lama sudah tidak berfungsi.');
+    } catch (err) {
+      showToast(err.message || 'Gagal mengganti token.', 'error');
+    } finally {
+      setIsRotating(false);
+    }
+  };
+
+  const waMessage = `Halo Bapak/Ibu ${d.nama},\n\nBerikut tautan aman Portal Reviewer SIDAMPAK Anda untuk meninjau logbook & laporan mahasiswa bimbingan (tanpa perlu login):\n${revealLink}\n\nTerima kasih.`;
+  const waHref = revealLink ? waLink(d.wa, waMessage) : null;
+
+  return (
+    <div className="p-4 border-b border-slate-50 dark:border-slate-800 last:border-0">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{d.nama || 'Tanpa Nama'}</p>
+          <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">{d.jabatan || '-'} • NUPTK {d.nuptk}</p>
+          <span className="inline-block mt-1 text-[9px] font-bold uppercase tracking-wider bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-md">
+            {d.jumlahBimbingan} Mahasiswa Bimbingan
+          </span>
+        </div>
+        <button onClick={() => setIsEditing(v => !v)} className="p-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg shrink-0">
+          {isEditing ? <X className="w-3.5 h-3.5" /> : <Pencil className="w-3.5 h-3.5" />}
+        </button>
+      </div>
+
+      {!isEditing ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+          <span>{d.wa || 'WA belum diisi'}</span>
+          <span className="text-slate-300">•</span>
+          <span className="truncate">{d.email || 'Email belum diisi'}</span>
+        </div>
+      ) : (
+        <div className="mt-3 space-y-2">
+          <input value={waInput} onChange={e => setWaInput(e.target.value)} placeholder="No. WhatsApp (628...)"
+            className="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
+          <input value={emailInput} onChange={e => setEmailInput(e.target.value)} placeholder="Email"
+            className="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
+          <button onClick={handleSave} disabled={isSaving} className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 disabled:opacity-70">
+            {isSaving ? <ButtonSpinner /> : 'Simpan'}
+          </button>
+        </div>
+      )}
+
+      <div className="mt-3 flex gap-2">
+        {!waHref ? (
+          <>
+            <button onClick={handleFetchLink} disabled={isFetchingLink || isRotating || !d.wa} title={!d.wa ? 'Isi nomor WA dulu' : ''}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold rounded-xl disabled:opacity-40">
+              {isFetchingLink ? <ButtonSpinner className="w-3.5 h-3.5" /> : <><FaWhatsapp className="w-3.5 h-3.5" /> Kirim Ulang Link</>}
+            </button>
+            <button onClick={handleRotate} disabled={isFetchingLink || isRotating} title="Cabut link lama & buat token baru"
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-xs font-bold rounded-xl disabled:opacity-40">
+              {isRotating ? <ButtonSpinner className="w-3.5 h-3.5" /> : <><RefreshCw className="w-3.5 h-3.5" /> Ganti Token</>}
+            </button>
+          </>
+        ) : (
+          <a href={waHref} target="_blank" rel="noreferrer" onClick={() => setTimeout(() => setRevealLink(''), 500)}
+            className="w-full flex items-center justify-center gap-1.5 py-2 bg-emerald-500 text-white text-xs font-bold rounded-xl">
+            <FaWhatsapp className="w-3.5 h-3.5" /> Buka WhatsApp
+          </a>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const DplManagementTab = ({ token, showToast }) => {
+  const [list, setList] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const load = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const rows = await api.superAdminGetDplList(token, {
+        onCacheHit: (cached) => { setList(cached || []); setIsLoading(false); },
+      });
+      setList(rows || []);
+    } catch (err) {
+      showToast(err.message || 'Gagal memuat daftar DPL.', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [token, showToast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const filtered = useMemo(() => {
+    const term = (searchTerm || '').toLowerCase();
+    if (!term) return list;
+    return list.filter(d => (d.nama || '').toLowerCase().includes(term) || (d.nuptk || '').includes(term));
+  }, [list, searchTerm]);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+          <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Cari nama atau NUPTK..."
+            className="w-full pl-8 pr-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
+        </div>
+        <button onClick={load} disabled={isLoading} title="Muat ulang data terbaru"
+          className="p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-xl disabled:opacity-50 shrink-0">
+          {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+        </button>
+      </div>
+
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
+        <div className="p-4 border-b border-slate-100 dark:border-slate-700"><h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm">Daftar DPL ({filtered.length})</h3></div>
+        {isLoading && list.length === 0 ? (
+          <div className="py-10"><Loader2 className="w-6 h-6 text-indigo-600 dark:text-indigo-400 animate-spin mx-auto" /></div>
+        ) : filtered.length === 0 ? (
+          <p className="text-center text-sm text-slate-400 dark:text-slate-500 py-8">Tidak ada data ditemukan.</p>
+        ) : (
+          <div>
+            {filtered.map(d => <DplRow key={d.nuptk} d={d} token={token} onSaved={load} showToast={showToast} />)}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
@@ -1481,7 +1795,7 @@ const AksesTab = ({ token, showToast }) => {
 
   return (
     <div className="space-y-4">
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-4">
         {!showForm ? (
           <button onClick={() => setShowForm(true)} className="w-full py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2">
             <Plus className="w-4 h-4" /> Buat Akses Baru
@@ -1489,33 +1803,33 @@ const AksesTab = ({ token, showToast }) => {
         ) : (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-slate-800 text-sm">Buat Akses Baru</h3>
-              <button onClick={resetForm} className="p-1.5 hover:bg-slate-100 rounded-lg"><X className="w-4 h-4 text-slate-400" /></button>
+              <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm">Buat Akses Baru</h3>
+              <button onClick={resetForm} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"><X className="w-4 h-4 text-slate-400 dark:text-slate-500" /></button>
             </div>
 
             <div className="flex gap-2">
-              <button onClick={() => setFormRole('koprodi')} className={`flex-1 py-2.5 rounded-xl text-xs font-bold ${formRole === 'koprodi' ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-500'}`}>Koprodi</button>
-              <button onClick={() => setFormRole('admin_fakultas')} className={`flex-1 py-2.5 rounded-xl text-xs font-bold ${formRole === 'admin_fakultas' ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-500'}`}>Admin Fakultas</button>
+              <button onClick={() => setFormRole('koprodi')} className={`flex-1 py-2.5 rounded-xl text-xs font-bold ${formRole === 'koprodi' ? 'bg-indigo-600 text-white' : 'bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400'}`}>Koprodi</button>
+              <button onClick={() => setFormRole('admin_fakultas')} className={`flex-1 py-2.5 rounded-xl text-xs font-bold ${formRole === 'admin_fakultas' ? 'bg-indigo-600 text-white' : 'bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400'}`}>Admin Fakultas</button>
             </div>
 
             <input value={formNama} onChange={e => setFormNama(e.target.value)} placeholder="Nama (mis. Bpk. Andi, S.Kom.)"
-              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
+              className="w-full p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
             <input value={formScope} onChange={e => setFormScope(e.target.value)}
               placeholder={formRole === 'koprodi' ? 'Nama Prodi (persis sama dengan master data)' : 'Nama Fakultas (persis sama dengan master data)'}
-              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
+              className="w-full p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
             <input value={formWa} onChange={e => setFormWa(e.target.value)} placeholder="No. WhatsApp (opsional, 628...)"
-              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
+              className="w-full p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
 
             <button onClick={handleGenerate} disabled={isGenerating} className="w-full py-3 bg-emerald-500 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-70">
               {isGenerating ? <><ButtonSpinner /> Membuat...</> : 'Generate Link'}
             </button>
 
             {generatedLink && (
-              <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-xl">
-                <p className="text-[10px] font-bold text-emerald-700 uppercase mb-1.5">Link berhasil dibuat:</p>
-                <p className="text-xs text-slate-600 break-all mb-2">{generatedLink}</p>
+              <div className="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-100 dark:border-emerald-800/50 p-3 rounded-xl">
+                <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase mb-1.5">Link berhasil dibuat:</p>
+                <p className="text-xs text-slate-600 dark:text-slate-300 break-all mb-2">{generatedLink}</p>
                 <div className="flex gap-2">
-                  <button onClick={handleCopy} className="flex-1 flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-700 bg-white px-3 py-1.5 rounded-lg border border-emerald-200">
+                  <button onClick={handleCopy} className="flex-1 flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-lg border border-emerald-200">
                     {copied ? <><Check className="w-3.5 h-3.5" /> Tersalin</> : <><Copy className="w-3.5 h-3.5" /> Salin Link</>}
                   </button>
                   {generatedWaHref && (
@@ -1534,20 +1848,20 @@ const AksesTab = ({ token, showToast }) => {
         )}
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="font-bold text-slate-800 text-sm">Akses Aktif ({list.length})</h3>
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
+        <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+          <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm">Akses Aktif ({list.length})</h3>
           <button onClick={load} disabled={isLoading} title="Muat ulang data terbaru"
-            className="p-1.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-lg disabled:opacity-50">
+            className="p-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg disabled:opacity-50">
             {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
           </button>
         </div>
         {isLoading && list.length === 0 ? (
-          <div className="py-10"><Loader2 className="w-6 h-6 text-indigo-600 animate-spin mx-auto" /></div>
+          <div className="py-10"><Loader2 className="w-6 h-6 text-indigo-600 dark:text-indigo-400 animate-spin mx-auto" /></div>
         ) : list.length === 0 ? (
-          <p className="text-center text-sm text-slate-400 py-8">Belum ada akses dibuat.</p>
+          <p className="text-center text-sm text-slate-400 dark:text-slate-500 py-8">Belum ada akses dibuat.</p>
         ) : (
-          <div className="divide-y divide-slate-50">
+          <div className="divide-y divide-slate-50 dark:divide-slate-800">
             {list.map(a => <AksesRow key={a.id} a={a} token={token} busyId={busyId} onRevoke={handleRevoke} onReload={load} showToast={showToast} />)}
           </div>
         )}
@@ -1657,16 +1971,16 @@ const LogbookLaporanTab = ({ token, showToast }) => {
 
   return (
     <div className="space-y-4 pb-24">
-      <div className="bg-white rounded-2xl shadow-sm p-1 flex gap-1 border border-slate-100">
-        <button onClick={() => setJenis('logbook')} className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all ${jenis === 'logbook' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>Logbook</button>
-        <button onClick={() => setJenis('laporan')} className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all ${jenis === 'laporan' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>Laporan Akhir</button>
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-1 flex gap-1 border border-slate-100 dark:border-slate-700">
+        <button onClick={() => setJenis('logbook')} className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all ${jenis === 'logbook' ? 'bg-slate-900 text-white' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>Logbook</button>
+        <button onClick={() => setJenis('laporan')} className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all ${jenis === 'laporan' ? 'bg-slate-900 text-white' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>Laporan Akhir</button>
       </div>
 
-      <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-3">
+      <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col gap-3">
         <div className="relative">
-          <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+          <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 dark:text-slate-500" />
           <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Cari nama atau NIM..."
-            className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
+            className="w-full pl-9 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
         </div>
         <div className="flex flex-wrap gap-2">
           <div className="relative">
@@ -1677,62 +1991,62 @@ const LogbookLaporanTab = ({ token, showToast }) => {
             <ChevronDown className="w-3.5 h-3.5 text-white absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
           <div className="relative">
-            <select value={selectedFakultas} onChange={e => setSelectedFakultas(e.target.value)} className="appearance-none pl-3 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none cursor-pointer max-w-[180px]">
+            <select value={selectedFakultas} onChange={e => setSelectedFakultas(e.target.value)} className="appearance-none pl-3 pr-8 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-xs font-bold outline-none cursor-pointer max-w-[180px]">
               <option value="semua">Semua Fakultas</option>
               {fakultasOptions.map(f => <option key={f} value={f}>{f}</option>)}
             </select>
-            <Building2 className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Building2 className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
           <div className="relative">
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="appearance-none pl-3 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none cursor-pointer">
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="appearance-none pl-3 pr-8 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-xs font-bold outline-none cursor-pointer">
               <option value="semua">Semua Status</option>
               {statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
-            <Filter className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Filter className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
           <button onClick={load} disabled={isLoading} title="Muat ulang data terbaru"
-            className="p-2 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl disabled:opacity-50">
+            className="p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-xl disabled:opacity-50">
             {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
           </button>
         </div>
       </div>
 
       {isLoading && items.length === 0 ? (
-        <div className="py-16"><Loader2 className="w-8 h-8 text-indigo-600 animate-spin mx-auto" /></div>
+        <div className="py-16"><Loader2 className="w-8 h-8 text-indigo-600 dark:text-indigo-400 animate-spin mx-auto" /></div>
       ) : error ? (
-        <div className="bg-white p-8 rounded-2xl text-center border border-slate-100">
+        <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl text-center border border-slate-100 dark:border-slate-700">
           <AlertCircle className="w-8 h-8 text-rose-500 mx-auto mb-2" />
-          <p className="text-sm font-bold text-slate-700">{error}</p>
+          <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{error}</p>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-          <div className="p-3 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-            <button onClick={toggleSelectAll} className="flex items-center gap-2 text-xs font-bold text-slate-600">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
+          <div className="p-3 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between bg-slate-50 dark:bg-slate-900">
+            <button onClick={toggleSelectAll} className="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
               <div className="w-5 h-5 border-2 rounded-md flex items-center justify-center transition-colors" style={{ borderColor: allFilteredSelected ? '#4F46E5' : '#CBD5E1', backgroundColor: allFilteredSelected ? '#4F46E5' : 'transparent' }}>
                 {allFilteredSelected && <CheckCircle className="w-3.5 h-3.5 text-white" />}
               </div>
               Pilih Semua ({filteredItems.length} difilter)
             </button>
-            {selectedIds.length > 0 && <span className="text-xs font-bold text-indigo-600">{selectedIds.length} dipilih</span>}
+            {selectedIds.length > 0 && <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">{selectedIds.length} dipilih</span>}
           </div>
 
           {filteredItems.length === 0 ? (
-            <p className="text-center text-sm text-slate-400 py-10">Tidak ada data ditemukan.</p>
+            <p className="text-center text-sm text-slate-400 dark:text-slate-500 py-10">Tidak ada data ditemukan.</p>
           ) : (
-            <div className="divide-y divide-slate-50 max-h-[560px] overflow-y-auto">
+            <div className="divide-y divide-slate-50 dark:divide-slate-800 max-h-[560px] overflow-y-auto">
               {filteredItems.map(it => {
                 const isSelected = selectedIds.includes(it.id);
                 return (
-                  <div key={it.id} onClick={() => toggleSelectOne(it.id)} className={`p-3.5 flex items-start gap-3 cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50/50' : 'hover:bg-slate-50'}`}>
+                  <div key={it.id} onClick={() => toggleSelectOne(it.id)} className={`p-3.5 flex items-start gap-3 cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50/50 dark:bg-indigo-900/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                     <div className="w-5 h-5 border-2 rounded-md flex items-center justify-center shrink-0 mt-0.5" style={{ borderColor: isSelected ? '#4F46E5' : '#CBD5E1', backgroundColor: isSelected ? '#4F46E5' : 'transparent' }}>
                       {isSelected && <CheckCircle className="w-3.5 h-3.5 text-white" />}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex justify-between items-start gap-2">
-                        <p className="text-sm font-semibold text-slate-800 truncate">{it.mahasiswaNama} <span className="text-[10px] text-slate-400 font-normal">({it.nim})</span></p>
-                        <span className="text-[9px] text-slate-400 shrink-0">{formatDateIndoShort(it.tanggal)}</span>
+                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{it.mahasiswaNama} <span className="text-[10px] text-slate-400 dark:text-slate-500 font-normal">({it.nim})</span></p>
+                        <span className="text-[9px] text-slate-400 dark:text-slate-500 shrink-0">{formatDateIndoShort(it.tanggal)}</span>
                       </div>
-                      <p className="text-xs text-slate-500 truncate mt-0.5">{jenis === 'logbook' ? (it.kegiatan || []).join(', ') : it.fileName}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">{jenis === 'logbook' ? (it.kegiatan || []).join(', ') : it.fileName}</p>
                       <span className={`inline-block mt-1.5 text-[9px] px-2 py-1 rounded-md font-bold uppercase tracking-wider ${getStatusBadgeClass(it.status)}`}>{it.status}</span>
                     </div>
                   </div>
@@ -1750,7 +2064,7 @@ const LogbookLaporanTab = ({ token, showToast }) => {
               <span className="w-5 h-5 bg-indigo-500 rounded-full flex items-center justify-center text-[10px]">{selectedIds.length}</span>
               Item Dipilih
             </span>
-            <button onClick={() => setSelectedIds([])} className="text-[10px] text-slate-400 hover:text-white">Batalkan</button>
+            <button onClick={() => setSelectedIds([])} className="text-[10px] text-slate-400 dark:text-slate-500 hover:text-white">Batalkan</button>
           </div>
           <div className="flex gap-2">
             <select value={bulkStatus} onChange={e => setBulkStatus(e.target.value)} className="flex-1 p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold outline-none">
@@ -1781,11 +2095,24 @@ export default function AdminUniversitasView() {
   const [mahasiswaForRingkasan, setMahasiswaForRingkasan] = useState([]);
   const [fakultasOptions, setFakultasOptions] = useState([]);
   const [isLoadingRingkasan, setIsLoadingRingkasan] = useState(true);
+  // Tema: 'light' | 'dark' -- pola & penyimpanan SAMA PERSIS dengan
+  // App.jsx (Mahasiswa), lewat helper theme di api.js, supaya pilihan
+  // pengguna konsisten dipakai ulang lintas portal di perangkat yang sama.
+  const [themeMode, setThemeMode] = useState(() => theme.getInitial());
 
   const showToast = (message, type = 'success') => setToast({ message, type });
 
   const handleLoggedIn = (token, nama) => setSession({ token, nama });
   const handleLogout = () => { superAdminSession.clear(); setSession(null); };
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (themeMode === 'dark') root.classList.add('dark');
+    else root.classList.remove('dark');
+    theme.save(themeMode);
+  }, [themeMode]);
+
+  const toggleTheme = () => setThemeMode(prev => (prev === 'dark' ? 'light' : 'dark'));
 
   // PENTING: dependency array HANYA session?.token -- BUKAN activeTab.
   // Sebelumnya effect ini ikut menembak ulang setiap kali tab
@@ -1822,52 +2149,79 @@ export default function AdminUniversitasView() {
 
   useEffect(() => { loadRingkasan(); }, [session?.token]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!session) return <SuperAdminLoginView onLoggedIn={handleLoggedIn} />;
+  if (!session) return <SuperAdminLoginView onLoggedIn={handleLoggedIn} themeMode={themeMode} onToggleTheme={toggleTheme} />;
 
   const tabs = [
     ['ringkasan', 'Ringkasan', LayoutDashboard],
     ['mahasiswa', 'Data Mahasiswa', Users],
     ['masterdata', 'Master Data', Building2],
     ['logboklaporan', 'Logbook & Laporan', FileText],
+    ['dpl', 'Manajemen DPL', GraduationCap],
     ['akses', 'Akses Portal', KeyRound],
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <Toast message={toast.message} type={toast.type} onClose={() => setToast({ message: '', type: 'success' })} />
 
-      <div className="bg-slate-900 text-white px-4 sm:px-8 pt-8 pb-6 shadow-xl">
-        <div className="flex justify-between items-start">
-          <div>
-            <p className="text-emerald-400 font-bold text-[10px] tracking-widest uppercase mb-1 flex items-center gap-2"><Lock className="w-3 h-3" /> Admin Universitas</p>
-            <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight">Halo, {session.nama}</h1>
+      <div className="bg-slate-900 dark:bg-slate-950 text-white px-4 sm:px-8 pt-6 sm:pt-8 pb-4 sm:pb-6 shadow-xl border-b border-slate-800/50">
+        <div className="flex justify-between items-start gap-3">
+          <div className="min-w-0">
+            <p className="text-emerald-400 font-bold text-[9px] sm:text-[10px] tracking-widest uppercase mb-1 flex items-center gap-2"><Lock className="w-3 h-3 shrink-0" /> Admin Universitas</p>
+            <h1 className="text-lg sm:text-2xl font-extrabold tracking-tight truncate">Halo, {session.nama}</h1>
           </div>
-          <button onClick={handleLogout} className="p-2.5 bg-white/10 hover:bg-white/20 rounded-xl transition-colors" title="Keluar">
-            <LogOut className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <ThemeToggle mode={themeMode} onToggle={toggleTheme} className="bg-white/10 hover:bg-white/20 text-white" />
+            <button onClick={handleLogout} className="p-2.5 bg-white/10 hover:bg-white/20 rounded-2xl transition-colors" title="Keluar">
+              <LogOut className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
-        <div className="flex gap-1 mt-6 overflow-x-auto pb-1">
+        {/* Navigasi tab -- HANYA di layar desktop (lg ke atas). Di HP &
+            tablet, navigasi dipindah ke bottom navbar fixed (lihat di
+            bawah) supaya lebih mudah dijangkau ibu jari & tidak makan
+            tempat vertikal yang berharga di layar sempit. */}
+        <div className="hidden lg:flex gap-1 mt-6 overflow-x-auto pb-1">
           {tabs.map(([key, label, Icon]) => (
             <button key={key} onClick={() => setActiveTab(key)}
-              className={`shrink-0 px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors ${activeTab === key ? 'bg-white text-slate-900' : 'bg-white/10 text-white hover:bg-white/20'}`}>
+              className={`shrink-0 px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors ${activeTab === key ? 'bg-white dark:bg-slate-800 text-slate-900' : 'bg-white/10 text-white hover:bg-white/20'}`}>
               <Icon className="w-3.5 h-3.5" /> {label}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto p-4 sm:p-6">
+      {/* Konten -- padding bawah ekstra di layar <lg supaya tidak
+          ketutupan bottom navbar fixed. */}
+      <div className="max-w-5xl mx-auto p-3 sm:p-4 md:p-6 pb-24 lg:pb-6">
         {activeTab === 'ringkasan' && (
           isLoadingRingkasan
-            ? <div className="py-16"><Loader2 className="w-8 h-8 text-indigo-600 animate-spin mx-auto" /></div>
+            ? <div className="py-16"><Loader2 className="w-8 h-8 text-indigo-600 dark:text-indigo-400 animate-spin mx-auto" /></div>
             : <RingkasanTab mahasiswaList={mahasiswaForRingkasan} fakultasOptions={fakultasOptions} onRefresh={loadRingkasan} isLoading={isLoadingRingkasan} />
         )}
         {activeTab === 'mahasiswa' && <MahasiswaTab token={session.token} showToast={showToast} />}
         {activeTab === 'masterdata' && <MasterDataTab token={session.token} showToast={showToast} />}
         {activeTab === 'logboklaporan' && <LogbookLaporanTab token={session.token} showToast={showToast} />}
+        {activeTab === 'dpl' && <DplManagementTab token={session.token} showToast={showToast} />}
         {activeTab === 'akses' && <AksesTab token={session.token} showToast={showToast} />}
       </div>
+
+      {/* BOTTOM NAVBAR -- khusus HP & tablet (di bawah breakpoint lg).
+          6 tab discroll horizontal kalau tidak muat, label kecil selalu
+          tampil (beda dari App.jsx Mahasiswa yang cuma 3 item jadi muat
+          tanpa scroll) -- ikon jadi penanda utama, label pendukung. */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-100 dark:border-slate-700 shadow-[0_-10px_30px_-10px_rgba(0,0,0,0.1)] safe-area-bottom">
+        <div className="flex overflow-x-auto">
+          {tabs.map(([key, label, Icon]) => (
+            <button key={key} onClick={() => setActiveTab(key)}
+              className={`flex-1 min-w-[74px] flex flex-col items-center justify-center gap-1 py-2.5 px-1 transition-colors ${activeTab === key ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500'}`}>
+              <Icon className={`w-5 h-5 ${activeTab === key ? 'scale-110' : ''} transition-transform`} />
+              <span className="text-[9px] font-bold leading-tight text-center px-0.5">{label}</span>
+            </button>
+          ))}
+        </div>
+      </nav>
     </div>
   );
 }
@@ -1886,6 +2240,13 @@ export default function AdminUniversitasView() {
 // mana yang membersihkan cache mana). Jangan duplikasi daftarnya di sini
 // lagi -- kalau berubah, gampang jadi tidak sinkron. Cukup pastikan
 // api.js yang dipakai project React Anda adalah versi terbaru.
+//
+// BARU untuk tab Manajemen DPL -- belum ada di api.js sebelumnya,
+// WAJIB ditambahkan:
+//   superAdminGetDplList: (token) => apiGet('superAdminGetDplList', { token }),
+//   superAdminGetDplReviewerLink: (token, nuptk) =>
+//     apiGet('superAdminGetDplReviewerLink', { token, nuptk }),
+//   (superAdminUpdateDosen dipakai lagi di sini -- SUDAH ADA, tidak perlu ditambah)
 //
 // getMahasiswaDetailForAdmin SUDAH ADA (dipakai juga oleh AdminFakultasView.jsx) --
 // tidak perlu ditambah lagi, backend-nya sudah menerima token admin_universitas juga.

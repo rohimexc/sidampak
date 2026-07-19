@@ -263,6 +263,28 @@ export const api = {
   getMahasiswaDetailForAdmin: (nim, token) =>
     apiGet('getMahasiswaDetailForAdmin', { nim, token }),
 
+  // Koprodi ATAU Admin Fakultas mengedit Nama & WA akun MEREKA SENDIRI.
+  // Membersihkan cache adminFakultas_ supaya header "Halo, {nama}"
+  // langsung ter-refresh saat data di-load ulang.
+  adminSelfUpdateProfile: async (token, { nama, wa }) => {
+    const result = await apiPost('adminSelfUpdateProfile', { token, nama, wa });
+    cacheClearPrefix(`adminFakultas_${token}`);
+    return result;
+  },
+
+  // --- Manajemen Koprodi oleh Admin Fakultas (BUKAN Admin Universitas)
+  // -- backend menolak kalau token bukan role admin_fakultas. ---
+  adminFakultasGetKoprodiList: (token, opts = {}) =>
+    swr(`adminFakultasKoprodiList_${token}`, () => apiGet('adminFakultasGetKoprodiList', { token }), {
+      onCacheHit: opts.onCacheHit,
+      maxAgeMs: 5 * 60 * 1000,
+    }),
+  adminFakultasUpdateKoprodi: async (token, { id, nama, wa }) => {
+    const result = await apiPost('adminFakultasUpdateKoprodi', { token, id, nama, wa });
+    cacheClearPrefix('adminFakultasKoprodiList_');
+    return result;
+  },
+
   // ---------------------------------------------------------------------
   // --- ADMIN UNIVERSITAS ---
   // Login sungguhan (email + password lewat Supabase Auth) + whitelist
@@ -426,8 +448,32 @@ export const api = {
   superAdminUpdateDosen: async (token, { nuptk, nama, jabatan, wa, email }) => {
     const result = await apiPost('superAdminUpdateDosen', { token, nuptk, nama, jabatan, wa, email });
     cacheClearPrefix('superAdminData_');
+    cacheClearPrefix('superAdminDplList_');
     return result;
   },
+
+  // --- Manajemen DPL (tab tersendiri, terpisah dari edit-lewat-detail-
+  // mahasiswa di atas) ---
+  // Daftar semua DPL + jumlah bimbingan -- cache sedang (10 menit),
+  // dibersihkan otomatis oleh superAdminUpdateDosen di atas.
+  superAdminGetDplList: (token, opts = {}) =>
+    swr(`superAdminDplList_${token}`, () => apiGet('superAdminGetDplList', { token }), {
+      onCacheHit: opts.onCacheHit,
+      maxAgeMs: 10 * 60 * 1000,
+    }),
+  // Link reviewer DPL -- TIDAK di-cache, sama seperti
+  // superAdminGetAdminAksesLink (harus selalu versi terbaru sebelum
+  // dikirim WA). CATATAN: link ini deterministik terhadap NUPTK+salt
+  // saat ini (buildDplToken_ di backend) -- memanggil ini berkali-kali
+  // TANPA rotate menghasilkan link yang SAMA, bukan link baru.
+  superAdminGetDplReviewerLink: (token, nuptk) =>
+    apiGet('superAdminGetDplReviewerLink', { token, nuptk }),
+  // "Ganti" token -- BEDA dari fungsi di atas: ini benar-benar mencabut
+  // SEMUA link lama DPL tsb (ganti TokenSalt-nya di backend) dan
+  // mengembalikan link BARU. Butuh kolom "TokenSalt" di tabel Dosen --
+  // lihat catatan di handleSuperAdminRotateDplToken_ (SuperAdmin.gs).
+  superAdminRotateDplToken: (token, nuptk) =>
+    apiPost('superAdminRotateDplToken', { token, nuptk }),
 
   // --- Manajemen Logbook & Laporan lintas universitas (ubah status
   // massal -- dipilih satu-satu ATAU seluruh hasil filter) ---
