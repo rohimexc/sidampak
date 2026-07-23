@@ -11,6 +11,7 @@ export default defineConfig({
         main: resolve(__dirname, 'index.html'),
         admin: resolve(__dirname, 'admin.html'),
         superadmin: resolve(__dirname, 'super-admin.html'),
+        reviewer: resolve(__dirname, 'reviewer.html'),
       },
     },
   },
