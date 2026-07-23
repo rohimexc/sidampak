@@ -3,6 +3,8 @@
 // + Cache layer (stale-while-revalidate) untuk pengalaman instan.
 // =====================================================================
 
+import { supabase } from './supabaseClient';
+
 export const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwpLDhR3clI_ECVI2IYoV2PQe95p9PeVK7HYQk5Y7U_tV-ly7fSeh121K01byy0M1R3/exec';
 
 // ---------------------------------------------------------------------
@@ -194,8 +196,40 @@ export const api = {
   },
 
   // --- MASTER DATA --- (Fakultas/Prodi/JenisProgram jarang berubah -> cache lama aman)
+  //
+  // SEKARANG query LANGSUNG ke Supabase (anon key + RLS baca-publik --
+  // lihat enable_public_read_rls.sql), TIDAK lagi lewat GAS sama sekali
+  // untuk fungsi ini -- lebih cepat (skip 1 lapis HTTP + cold start GAS)
+  // dan tidak ikut menghabiskan kuota urlfetch harian GAS. handleGetMasterData_
+  // di Api.gs TETAP ada di backend (tidak dihapus, sekadar tidak lagi
+  // dipanggil dari sini) -- aman dibiarkan sebagai fallback/dipakai
+  // konsumen lain kalau ada.
+  //
+  // jenisProgram TIDAK datang dari tabel manapun (dulu pun hardcode di
+  // Api.gs) -- disalin persis di sini, konsisten dengan PROGRAM_LIST_FALLBACK
+  // di App.jsx.
   getMasterData: (opts = {}) =>
-    swr('masterData', () => apiGet('getMasterData'), {
+    swr('masterData', async () => {
+      const [fakultasRes, prodiRes, taRes] = await Promise.all([
+        supabase.from('Fakultas').select('NamaFakultas').order('NamaFakultas'),
+        supabase.from('Prodi').select('NamaProdi, NamaFakultas').order('NamaProdi'),
+        supabase.from('TahunAjaran').select('*').eq('StatusAktif', 'Aktif').limit(1),
+      ]);
+      if (fakultasRes.error) throw new Error(fakultasRes.error.message);
+      if (prodiRes.error) throw new Error(prodiRes.error.message);
+      if (taRes.error) throw new Error(taRes.error.message);
+
+      return {
+        fakultas: (fakultasRes.data || []).map((r) => r.NamaFakultas),
+        prodi: (prodiRes.data || []).map((r) => ({ nama: r.NamaProdi, fakultas: r.NamaFakultas })),
+        jenisProgram: [
+          'Kampus Mengajar Berdampak', 'Magang Berdampak', 'Studi Independen Berdampak',
+          'Pertukaran Mahasiswa Berdampak', 'Bina Desa Berdampak', 'Kewirausahaan Berdampak',
+          'Proyek Kemanusiaan Berdampak',
+        ],
+        tahunAjaranAktif: (taRes.data && taRes.data.length > 0) ? taRes.data[0] : null,
+      };
+    }, {
       onCacheHit: opts.onCacheHit,
       maxAgeMs: 24 * 60 * 60 * 1000, // 24 jam
     }),
@@ -210,6 +244,48 @@ export const api = {
       onCacheHit: opts.onCacheHit,
       maxAgeMs: 24 * 60 * 60 * 1000, // 24 jam
     }),
+
+  // Daftar referensi Dosen (tabel Supabase "datadosen") untuk
+  // SearchableSelect "Nama Lengkap & Gelar" di form DPL, ProfileSetupView
+  // step 3. Query LANGSUNG ke Supabase (anon key + RLS baca-publik) --
+  // TIDAK lagi lewat GAS. Cache lama (24 jam) aman -- daftar dosen
+  // universitas tidak berubah drastis harian.
+  //
+  // Ikut mengambil wa & email -- dipakai ProfileSetupView untuk
+  // OTOMATIS mengisi No. WhatsApp & Email DPL begitu mahasiswa memilih
+  // nama dosennya (field tetap bisa diubah manual sesudahnya, ini cuma
+  // isian awal, bukan dikunci/disabled).
+  //
+  // PENTING: nama kolom di tabel ini snake_case huruf kecil (nuptk,
+  // nama_dosen, wa, email) -- BEDA dari konvensi PascalCase yang dipakai
+  // tabel lain di project ini (NUPTK, Nama). Sesuaikan di sini kalau
+  // skema tabel berubah lagi nanti.
+  getDosenList: (opts = {}) =>
+    swr('dosenList', async () => {
+      const { data, error } = await supabase.from('datadosen').select('id, nama_dosen, nuptk, wa, email').order('nama_dosen');
+      if (error) throw new Error(error.message);
+      return (data || []).map((r) => ({ id: r.id, nama: r.nama_dosen, nuptk: r.nuptk, wa: r.wa, email: r.email }));
+    }, {
+      onCacheHit: opts.onCacheHit,
+      maxAgeMs: 24 * 60 * 60 * 1000, // 24 jam
+    }),
+
+  // --- Kelola data dosen referensi (KHUSUS Admin Fakultas) --- Baca
+  // (getDosenList di atas) langsung ke Supabase; tulis (tambah/edit)
+  // WAJIB lewat GAS supaya ada validasi & otorisasi role. Setiap aksi
+  // tulis membersihkan cache 'dosenList' supaya daftar (dipakai BERSAMA
+  // oleh form profil mahasiswa) langsung ter-refresh. TIDAK ada fungsi
+  // hapus -- disengaja, tidak dibutuhkan.
+  adminFakultasAddDosen: async (token, { nama, nuptk, wa, email }) => {
+    const result = await apiPost('adminFakultasAddDosen', { token, nama, nuptk, wa, email });
+    cacheClearPrefix('dosenList');
+    return result;
+  },
+  adminFakultasUpdateDosenReferensi: async (token, { id, nama, nuptk, wa, email }) => {
+    const result = await apiPost('adminFakultasUpdateDosenReferensi', { token, id, nama, nuptk, wa, email });
+    cacheClearPrefix('dosenList');
+    return result;
+  },
 
   // --- REVIEWER ---
   // Semua aksi reviewer SEKARANG wajib menyertakan token (lihat

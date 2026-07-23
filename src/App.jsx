@@ -12,7 +12,6 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 import { api, session, localDrafts, theme, pingServer } from './api';
-import dosenData from './data/dosen.json';
 
 // --- MOCK DATA & CONSTANTS (yang TIDAK datang dari server) ---
 // Daftar ini dipakai sebagai fallback kalau getMasterData() belum selesai
@@ -649,12 +648,17 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
   const fakultasOptions = masterData?.fakultas?.length ? masterData.fakultas : FAKULTAS_LIST_FALLBACK;
   const prodiOptions = masterData?.prodi?.length ? masterData.prodi.map(p => p.nama) : PRODI_LIST_FALLBACK;
   const programOptions = masterData?.jenisProgram?.length ? masterData.jenisProgram : PROGRAM_LIST_FALLBACK;
+  // dosenList sekarang datang dari server (tabel Supabase "datadosen",
+  // lewat api.getDosenList) -- bentuknya [{ nama, nuptk }, ...], BUKAN
+  // lagi file statis dosen.json yang key-nya "NAMA DOSEN" (dengan spasi).
   const dosenOptions = (dosenList || [])
-  .map(d => d['NAMA DOSEN'])
+  .map(d => d.nama)
   .filter(Boolean); // buang null/undefined/''
 
+  // Simpan SELURUH record (bukan cuma NUPTK) supaya WA & Email juga bisa
+  // ikut diisi otomatis saat nama dosen dipilih -- lihat handleDplNamaChange.
   const dosenByNama = (dosenList || []).reduce((acc, d) => {
-    if (d['NAMA DOSEN']) acc[d['NAMA DOSEN']] = d.NUPTK || '';
+    if (d.nama) acc[d.nama] = d;
     return acc;
   }, {});
 
@@ -697,16 +701,22 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
   const [tempLokasi, setTempLokasi] = useState('');
 
   const handleChange = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
-  // Saat nama dosen dipilih dari daftar dosen.json, NUPTK otomatis ikut
-  // terisi (dan field NUPTK jadi readonly -- lihat step 3). Kalau pengguna
-  // mengetik nama bebas yang TIDAK ada di dosenByNama (dosen tidak
-  // terdaftar di data), NUPTK dikosongkan supaya tidak salah pasang dengan
-  // NUPTK dosen lain, dan field NUPTK kembali bisa diisi manual.
+  // Saat nama dosen dipilih dari daftar referensi (tabel Supabase
+  // "datadosen"), NUPTK, WA, dan Email OTOMATIS ikut terisi kalau memang
+  // ada datanya -- field-fieldnya TETAP input biasa (bukan disabled),
+  // jadi mahasiswa bebas mengubahnya lagi sesudahnya kalau memang perlu.
+  // Kalau pengguna mengetik nama bebas yang TIDAK ada di dosenByNama
+  // (dosen tidak terdaftar di data referensi), NUPTK/WA/Email dikosongkan
+  // (WA balik ke default '62') supaya tidak salah pasang dengan data
+  // dosen lain yang sebelumnya sempat terisi otomatis.
   const handleDplNamaChange = (namaTerpilih) => {
+    const found = dosenByNama[namaTerpilih];
     setFormData(prev => ({
       ...prev,
       dplNama: namaTerpilih || '',
-      dplNuptk: dosenByNama[namaTerpilih] || ''
+      dplNuptk: found?.nuptk || '',
+      dplWa: found?.wa || '62',
+      dplEmail: found?.email || '',
     }));
   };
 
@@ -2718,6 +2728,11 @@ export default function App() {
   const [toast, setToast] = useState({ message: '', type: 'success' });
   const [masterData, setMasterData] = useState(null);
   const [programSuggestions, setProgramSuggestions] = useState(null);
+  // Daftar referensi Dosen (tabel Supabase "datadosen") -- MENGGANTIKAN
+  // file statis dosen.json yang sebelumnya di-import langsung. Default
+  // array kosong (bukan null) supaya .map/.reduce di ProfileSetupView
+  // tetap aman dipanggil sebelum data pertama kali datang.
+  const [dosenList, setDosenList] = useState([]);
   const [isLoadingDashboardData, setIsLoadingDashboardData] = useState(false);
   // Loading per-section: profil tidak lagi menunggu logbook/laporan untuk
   // tampil. Masing-masing punya status loading sendiri supaya DashboardView
@@ -2762,6 +2777,16 @@ export default function App() {
   useEffect(() => {
     api.getProgramSuggestions({ onCacheHit: setProgramSuggestions })
       .then(setProgramSuggestions)
+      .catch(() => {});
+  }, []);
+
+  // Daftar referensi Dosen (tabel Supabase "datadosen") untuk form DPL
+  // di ProfileSetupView -- gagal diam-diam tidak fatal, SearchableSelect
+  // tetap bisa dipakai sebagai input teks bebas kalau daftar ini kosong
+  // (cuma kehilangan fitur pencarian/autocomplete, bukan error).
+  useEffect(() => {
+    api.getDosenList({ onCacheHit: setDosenList })
+      .then(setDosenList)
       .catch(() => {});
   }, []);
 
@@ -3066,7 +3091,7 @@ export default function App() {
             currentNim={user?.nim} 
             masterData={masterData}
             programSuggestions={programSuggestions}
-            dosenList={dosenData}
+            dosenList={dosenList}
             onSave={handleSaveProfile} 
             // Tombol "Kembali" hanya muncul kalau profil SUDAH benar-benar lengkap
             onBack={(profile && profile.nama && profile.email && profile.prodi && profile.fakultas && profile.lokasi) ? () => setView('dashboard') : null} 

@@ -3,7 +3,7 @@ import {
   Lock, Users, FileText, BookOpen, Clock, CheckCircle, AlertCircle,
   Download, Search, Loader2, Filter, ChevronDown, ChevronLeft, ChevronRight,
   TrendingUp, MapPin, Mail, GraduationCap, X, FileWarning, RefreshCw,
-  Sun, Moon, ArrowUp, Pencil, Check, User
+  Sun, Moon, ArrowUp, Pencil, Check, User, Plus
 } from 'lucide-react';
 import { FaWhatsapp } from 'react-icons/fa';
 import * as XLSX from 'xlsx';
@@ -605,6 +605,181 @@ const KoprodiManagementModal = ({ adminToken, onClose, showToast }) => {
 };
 
 // =====================================================================
+// MODAL: KELOLA DATA DOSEN (tabel referensi "datadosen") -- KHUSUS
+// Admin Fakultas. Baca (list) langsung ke Supabase (api.getDosenList,
+// sama dengan yang dipakai form profil mahasiswa) -- tambah/edit/hapus
+// lewat GAS (api.adminFakultasAddDosen/UpdateDosenReferensi/DeleteDosen).
+// =====================================================================
+const DosenRow = ({ d, adminToken, onSaved, showToast }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [nama, setNama] = useState(d.nama || '');
+  const [nuptk, setNuptk] = useState(d.nuptk || '');
+  const [wa, setWa] = useState(d.wa || '');
+  const [email, setEmail] = useState(d.email || '');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!nama.trim() || !nuptk.trim()) { showToast('Nama dan NUPTK wajib diisi.', 'error'); return; }
+    setIsSaving(true);
+    try {
+      await api.adminFakultasUpdateDosenReferensi(adminToken, { id: d.id, nama: nama.trim(), nuptk: nuptk.trim(), wa: wa.trim(), email: email.trim() });
+      showToast('Data dosen berhasil diperbarui.');
+      setIsEditing(false);
+      onSaved();
+    } catch (err) {
+      showToast(err.message || 'Gagal menyimpan.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="p-4 border-b border-slate-50 dark:border-slate-700 last:border-0">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{d.nama || 'Tanpa Nama'}</p>
+          <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">NUPTK {d.nuptk}</p>
+        </div>
+        <button onClick={() => setIsEditing(v => !v)} className="p-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg shrink-0">
+          {isEditing ? <X className="w-3.5 h-3.5" /> : <Pencil className="w-3.5 h-3.5" />}
+        </button>
+      </div>
+
+      {!isEditing ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+          <span>{d.wa || 'WA belum diisi'}</span>
+          <span className="text-slate-300 dark:text-slate-600">•</span>
+          <span className="truncate">{d.email || 'Email belum diisi'}</span>
+        </div>
+      ) : (
+        <div className="mt-3 space-y-2">
+          <input value={nama} onChange={e => setNama(e.target.value)} placeholder="Nama lengkap & gelar" disabled={isSaving}
+            className="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60" />
+          <input value={nuptk} onChange={e => setNuptk(e.target.value)} placeholder="NUPTK" disabled={isSaving}
+            className="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60" />
+          <input value={wa} onChange={e => setWa(e.target.value)} placeholder="No. WhatsApp (628...)" disabled={isSaving}
+            className="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60" />
+          <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" disabled={isSaving}
+            className="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60" />
+          <button onClick={handleSave} disabled={isSaving} className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 disabled:opacity-70">
+            {isSaving ? <ButtonSpinner /> : 'Simpan'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const DosenManagementModal = ({ adminToken, onClose, showToast }) => {
+  const [list, setList] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addNama, setAddNama] = useState('');
+  const [addNuptk, setAddNuptk] = useState('');
+  const [addWa, setAddWa] = useState('');
+  const [addEmail, setAddEmail] = useState('');
+  const [isAdding, setIsAdding] = useState(false);
+
+  const load = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const rows = await api.getDosenList({
+        onCacheHit: (cached) => { setList(cached || []); setIsLoading(false); },
+      });
+      setList(rows || []);
+    } catch (err) {
+      showToast(err.message || 'Gagal memuat daftar dosen.', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [showToast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const filtered = useMemo(() => {
+    const term = (searchTerm || '').toLowerCase();
+    if (!term) return list;
+    return list.filter(d => (d.nama || '').toLowerCase().includes(term) || (d.nuptk || '').includes(term));
+  }, [list, searchTerm]);
+
+  const handleAdd = async () => {
+    if (!addNama.trim() || !addNuptk.trim()) { showToast('Nama dan NUPTK wajib diisi.', 'error'); return; }
+    setIsAdding(true);
+    try {
+      await api.adminFakultasAddDosen(adminToken, { nama: addNama.trim(), nuptk: addNuptk.trim(), wa: addWa.trim(), email: addEmail.trim() });
+      showToast('Data dosen berhasil ditambahkan.');
+      setAddNama(''); setAddNuptk(''); setAddWa(''); setAddEmail('');
+      setShowAddForm(false);
+      load();
+    } catch (err) {
+      showToast(err.message || 'Gagal menambah data dosen.', 'error');
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-white dark:bg-slate-800 flex flex-col animate-in slide-in-from-bottom-full sm:slide-in-from-right-10 duration-300">
+      <div className="bg-white dark:bg-slate-800 px-4 sm:px-6 pt-6 pb-4 shadow-sm border-b border-slate-100 dark:border-slate-700 sticky top-0 z-10 flex items-center gap-3">
+        <button onClick={onClose} className="p-2 -ml-2 bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-2xl transition-colors">
+          <ChevronLeft className="w-6 h-6 text-slate-700 dark:text-slate-200" />
+        </button>
+        <h1 className="text-lg font-extrabold text-slate-800 dark:text-slate-100 tracking-tight">Kelola Data Dosen</h1>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+            <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Cari nama atau NUPTK..."
+              className="w-full pl-8 pr-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
+          <button onClick={() => setShowAddForm(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold shrink-0 ${showAddForm ? 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300' : 'bg-indigo-600 text-white'}`}>
+            {showAddForm ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />} {showAddForm ? 'Batal' : 'Tambah'}
+          </button>
+        </div>
+
+        {showAddForm && (
+          <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/50 rounded-2xl p-4 space-y-2">
+            <input value={addNama} onChange={e => setAddNama(e.target.value)} placeholder="Nama lengkap & gelar" disabled={isAdding}
+              className="w-full p-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60" />
+            <input value={addNuptk} onChange={e => setAddNuptk(e.target.value)} placeholder="NUPTK" disabled={isAdding}
+              className="w-full p-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60" />
+            <input value={addWa} onChange={e => setAddWa(e.target.value)} placeholder="No. WhatsApp (628...) -- opsional" disabled={isAdding}
+              className="w-full p-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60" />
+            <input value={addEmail} onChange={e => setAddEmail(e.target.value)} placeholder="Email -- opsional" disabled={isAdding}
+              className="w-full p-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60" />
+            <button onClick={handleAdd} disabled={isAdding} className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 disabled:opacity-70">
+              {isAdding ? <ButtonSpinner /> : 'Simpan Dosen Baru'}
+            </button>
+          </div>
+        )}
+
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
+          <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+            <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm">Daftar Dosen ({filtered.length})</h3>
+            <button onClick={load} disabled={isLoading} title="Muat ulang" className="p-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg disabled:opacity-50">
+              {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+          {isLoading && list.length === 0 ? (
+            <div className="py-10"><Loader2 className="w-6 h-6 text-indigo-600 animate-spin mx-auto" /></div>
+          ) : filtered.length === 0 ? (
+            <p className="text-center text-sm text-slate-400 dark:text-slate-500 py-8">Tidak ada dosen ditemukan.</p>
+          ) : (
+            <div>
+              {filtered.map(d => <DosenRow key={d.id} d={d} adminToken={adminToken} onSaved={load} showToast={showToast} />)}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// =====================================================================
 // KOMPONEN UTAMA
 // =====================================================================
 export default function AdminFakultasView({ adminToken }) {
@@ -631,6 +806,7 @@ export default function AdminFakultasView({ adminToken }) {
   const [isExporting, setIsExporting] = useState(false);
   const [showSelfProfile, setShowSelfProfile] = useState(false);
   const [showKoprodiManagement, setShowKoprodiManagement] = useState(false);
+  const [showDosenManagement, setShowDosenManagement] = useState(false);
   const [toast, setToast] = useState({ message: '', type: 'success' });
   const showToast = (message, type = 'success') => setToast({ message, type });
   const [selectedNim, setSelectedNim] = useState(null);
@@ -907,6 +1083,12 @@ export default function AdminFakultasView({ adminToken }) {
                   <Users className="w-5 h-5" />
                 </button>
               )}
+              {isAdminFakultas && (
+                <button onClick={() => setShowDosenManagement(true)} title="Kelola Data Dosen"
+                  className="p-2.5 bg-white/10 hover:bg-white/20 text-white rounded-2xl transition-colors">
+                  <GraduationCap className="w-5 h-5" />
+                </button>
+              )}
               <ThemeToggle mode={themeMode} onToggle={toggleTheme} className="bg-white/10 hover:bg-white/20 text-white" />
             </div>
           </div>
@@ -1157,6 +1339,14 @@ export default function AdminFakultasView({ adminToken }) {
         <KoprodiManagementModal
           adminToken={adminToken}
           onClose={() => setShowKoprodiManagement(false)}
+          showToast={showToast}
+        />
+      )}
+
+      {showDosenManagement && isAdminFakultas && (
+        <DosenManagementModal
+          adminToken={adminToken}
+          onClose={() => setShowDosenManagement(false)}
           showToast={showToast}
         />
       )}
