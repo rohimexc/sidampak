@@ -97,6 +97,14 @@ const PageLoader = ({ label = 'Memuat data...' }) => (
   </div>
 );
 
+// Spinner kecil untuk dipasang di dalam tombol saat proses simpan/submit
+// berjalan -- BARU DITAMBAHKAN (sebelumnya dipakai di 4 tempat tanpa
+// pernah didefinisikan di file ini, menyebabkan "ButtonSpinner is not
+// defined"). Sama persis polanya dengan App.jsx/AdminUniversitasView.jsx.
+const ButtonSpinner = ({ className = '' }) => (
+  <Loader2 className={`w-5 h-5 animate-spin ${className}`} />
+);
+
 // Tombol toggle light/dark, ikon menunjukkan TUJUAN tekan (bukan status
 // saat ini) -- pola sama dengan App.jsx (Mahasiswa) & AdminUniversitasView.
 const ThemeToggle = ({ mode, onToggle, className = '' }) => (
