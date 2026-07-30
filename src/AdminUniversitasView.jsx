@@ -1459,20 +1459,48 @@ const buildAksesWaMessage = (nama, role, scope, link) =>
 // di backend soal kenapa link harus diambil ulang, bukan disimpan).
 const AksesRow = ({ a, token, busyId, onRevoke, onReload, showToast }) => {
   const [isFetchingLink, setIsFetchingLink] = useState(false);
+  const [isCopying, setIsCopying] = useState(false);
   const [revealLink, setRevealLink] = useState('');
+  const [copied, setCopied] = useState(false);
   const [isEditingWa, setIsEditingWa] = useState(false);
   const [waInput, setWaInput] = useState('');
   const [isSavingWa, setIsSavingWa] = useState(false);
+  // Nomor WA ditampilkan dari state LOKAL (bukan langsung mutasi `a.wa`
+  // seperti sebelumnya -- itu anti-pattern React yang bisa bikin
+  // tampilan tidak sinkron kalau parent re-render/reload di tengah
+  // proses). Disinkronkan ulang tiap kali prop `a` berganti (mis.
+  // setelah onReload() selesai), tapi update lokal langsung dipakai
+  // duluan supaya UI tidak perlu menunggu reload selesai.
+  const [currentWa, setCurrentWa] = useState(a.wa || '');
+  useEffect(() => { setCurrentWa(a.wa || ''); }, [a.wa]);
 
   const handleFetchLink = async () => {
     setIsFetchingLink(true);
     try {
       const result = await api.superAdminGetAdminAksesLink(token, a.id);
       setRevealLink(result.link);
+      return result.link;
     } catch (err) {
       showToast(err.message || 'Gagal mengambil link.', 'error');
+      return null;
     } finally {
       setIsFetchingLink(false);
+    }
+  };
+
+  const handleCopyLink = async () => {
+    setIsCopying(true);
+    try {
+      const link = revealLink || await handleFetchLink();
+      if (!link) return; // handleFetchLink sudah menampilkan toast error kalau gagal
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      showToast('Link disalin.');
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      showToast('Gagal menyalin link. Salin manual dari tombol Kirim WA.', 'error');
+    } finally {
+      setIsCopying(false);
     }
   };
 
@@ -1481,19 +1509,25 @@ const AksesRow = ({ a, token, busyId, onRevoke, onReload, showToast }) => {
     setIsSavingWa(true);
     try {
       const result = await api.superAdminUpdateAdminAksesWa(token, a.id, waInput.trim());
-      a.wa = result.wa; // update lokal langsung supaya waLink() di bawah pakai nomor baru tanpa nunggu reload
+      setCurrentWa(result.wa);
       setRevealLink(result.link);
       setIsEditingWa(false);
       showToast('Nomor WhatsApp tersimpan.');
       onReload();
     } catch (err) {
-      showToast(err.message || 'Gagal menyimpan nomor.', 'error');
+      // PENTING: kalau error muncul DI SINI, nomor WA kemungkinan BESAR
+      // tetap tersimpan (updateObjectRow_ di backend jalan duluan SEBELUM
+      // token/link dibangun) -- errornya kemungkinan terjadi di langkah
+      // SESUDAHNYA (membangun ulang link). Muat ulang daftar supaya
+      // tampilan tidak "lupa" nomor yang sebenarnya sudah tersimpan.
+      showToast(err.message || 'Gagal menyimpan nomor. Coba muat ulang untuk cek apakah nomornya sudah tersimpan.', 'error');
+      onReload();
     } finally {
       setIsSavingWa(false);
     }
   };
 
-  const waHref = revealLink ? waLink(a.wa, buildAksesWaMessage(a.nama, a.role, a.scope, revealLink)) : null;
+  const waHref = revealLink ? waLink(currentWa, buildAksesWaMessage(a.nama, a.role, a.scope, revealLink)) : null;
 
   return (
     <div className="p-4">
@@ -1505,12 +1539,16 @@ const AksesRow = ({ a, token, busyId, onRevoke, onReload, showToast }) => {
           </p>
         </div>
         <div className="flex gap-1.5 shrink-0">
-          {!a.wa && !isEditingWa && (
+          <button onClick={handleCopyLink} disabled={isCopying || isFetchingLink} title="Salin link akses"
+            className="px-3 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-[10px] font-bold rounded-lg disabled:opacity-40 flex items-center gap-1">
+            {isCopying ? <ButtonSpinner /> : copied ? <><Check className="w-3 h-3" /> Tersalin</> : <><Copy className="w-3 h-3" /> Salin Link</>}
+          </button>
+          {!currentWa && !isEditingWa && (
             <button onClick={() => setIsEditingWa(true)} className="px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold rounded-lg flex items-center gap-1">
               <FaWhatsapp className="w-3 h-3" /> Kirim WA
             </button>
           )}
-          {a.wa && !revealLink && (
+          {currentWa && !revealLink && (
             <button onClick={handleFetchLink} disabled={isFetchingLink}
               className="px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold rounded-lg disabled:opacity-40 flex items-center gap-1">
               {isFetchingLink ? <ButtonSpinner /> : <><FaWhatsapp className="w-3 h-3" /> Kirim WA</>}
@@ -1528,6 +1566,10 @@ const AksesRow = ({ a, token, busyId, onRevoke, onReload, showToast }) => {
           </button>
         </div>
       </div>
+
+      {currentWa && (
+        <p className="mt-2 text-[10px] text-slate-400 dark:text-slate-500">{currentWa}</p>
+      )}
 
       {isEditingWa && (
         <div className="mt-3 flex gap-2">
@@ -1734,6 +1776,7 @@ const AksesTab = ({ token, showToast }) => {
   const [generatedLink, setGeneratedLink] = useState('');
   const [copied, setCopied] = useState(false);
   const [busyId, setBusyId] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -1750,6 +1793,16 @@ const AksesTab = ({ token, showToast }) => {
   }, [token, showToast]);
 
   useEffect(() => { load(); }, [load]);
+
+  const filteredList = useMemo(() => {
+    const term = (searchTerm || '').toLowerCase();
+    if (!term) return list;
+    return list.filter(a =>
+      (a.nama || '').toLowerCase().includes(term) ||
+      (a.scope || '').toLowerCase().includes(term) ||
+      (a.role || '').toLowerCase().includes(term)
+    );
+  }, [list, searchTerm]);
 
   const handleGenerate = async () => {
     if (!formNama.trim() || !formScope.trim()) { showToast('Nama dan scope wajib diisi.', 'error'); return; }
@@ -1849,20 +1902,27 @@ const AksesTab = ({ token, showToast }) => {
       </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
-        <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
-          <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm">Akses Aktif ({list.length})</h3>
+        <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between gap-2">
+          <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm shrink-0">Akses Aktif ({filteredList.length})</h3>
           <button onClick={load} disabled={isLoading} title="Muat ulang data terbaru"
-            className="p-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg disabled:opacity-50">
+            className="p-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg disabled:opacity-50 shrink-0">
             {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
           </button>
         </div>
+        <div className="p-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50">
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+            <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Cari nama, prodi/fakultas, atau role..."
+              className="w-full pl-8 pr-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
+        </div>
         {isLoading && list.length === 0 ? (
           <div className="py-10"><Loader2 className="w-6 h-6 text-indigo-600 dark:text-indigo-400 animate-spin mx-auto" /></div>
-        ) : list.length === 0 ? (
-          <p className="text-center text-sm text-slate-400 dark:text-slate-500 py-8">Belum ada akses dibuat.</p>
+        ) : filteredList.length === 0 ? (
+          <p className="text-center text-sm text-slate-400 dark:text-slate-500 py-8">{list.length === 0 ? 'Belum ada akses dibuat.' : 'Tidak ada yang cocok dengan pencarian.'}</p>
         ) : (
           <div className="divide-y divide-slate-50 dark:divide-slate-800">
-            {list.map(a => <AksesRow key={a.id} a={a} token={token} busyId={busyId} onRevoke={handleRevoke} onReload={load} showToast={showToast} />)}
+            {filteredList.map(a => <AksesRow key={a.id} a={a} token={token} busyId={busyId} onRevoke={handleRevoke} onReload={load} showToast={showToast} />)}
           </div>
         )}
       </div>

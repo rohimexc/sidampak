@@ -152,6 +152,77 @@ export const api = {
     return freshProfile;
   },
 
+  // --- PROFIL Bagian 1-3 -- LANGSUNG ke Supabase lewat RPC (lihat
+  // supabase_profil_rpc.sql) -- TIDAK lewat Apps Script sama sekali.
+  // Bagian 4 (berkas PDF) TETAP pakai api.saveProfile di atas (perlu
+  // upload ke Google Drive lewat GAS).
+  //
+  // Semua fungsi ini butuh `password` mentah mahasiswa (disimpan
+  // sementara di sessionStorage lewat session.savePassword saat login
+  // -- lihat objek `session` di bawah) supaya RPC bisa memverifikasi
+  // NIM+Password SEBELUM membaca/menulis apa pun. Kalau password tidak
+  // tersedia (mis. sesi lama sebelum tab ditutup), fungsi ini melempar
+  // error -- pemanggil (ProfileSetupView) wajib menampilkan pesan minta
+  // login ulang, BUKAN diam-diam gagal.
+  getProfilBagian123: async (nim, password) => {
+    if (!password) throw new Error('Sesi sudah tidak aktif, silakan login ulang untuk memuat Bagian 1-3.');
+    const { data, error } = await supabase.rpc('get_profil_bagian123', { p_nim: nim, p_password: password });
+    if (error) throw new Error(error.message || 'Gagal memuat profil dari Supabase.');
+    return data; // null kalau NIM belum py baris Mahasiswa (harusnya tidak terjadi, NIM dibuat saat register)
+  },
+
+  saveProfilStep1: async (nim, password, data) => {
+    if (!password) throw new Error('Sesi sudah tidak aktif, silakan login ulang sebelum menyimpan.');
+    const { error } = await supabase.rpc('save_profil_step1', {
+      p_nim: nim,
+      p_password: password,
+      p_nama: data.nama,
+      p_wa: data.wa,
+      p_email: data.email,
+      p_prodi: data.prodi,
+      p_fakultas: data.fakultas,
+      p_jenis_program: data.jenisProgram,
+      p_nama_program: data.namaProgram,
+      p_mitra: data.mitra,
+      p_lokasi: data.lokasi,
+      p_tgl_awal: data.tglAwal,
+      p_tgl_akhir: data.tglAkhir,
+    });
+    if (error) throw new Error(error.message || 'Gagal menyimpan Bagian 1.');
+    return true;
+  },
+
+  saveProfilStep2: async (nim, password, mataKuliah) => {
+    if (!password) throw new Error('Sesi sudah tidak aktif, silakan login ulang sebelum menyimpan.');
+    // Buang field lokal 'id' (dibuat generateId() di UI) -- backend
+    // yang menerbitkan ID sendiri (gen_random_uuid()) saat insert.
+    const cleaned = (mataKuliah || []).map(({ kode, nama, sks }) => ({ kode, nama, sks }));
+    const { error } = await supabase.rpc('save_profil_step2', {
+      p_nim: nim,
+      p_password: password,
+      p_matkul: cleaned,
+    });
+    if (error) throw new Error(error.message || 'Gagal menyimpan Bagian 2.');
+    return true;
+  },
+
+  saveProfilStep3: async (nim, password, data) => {
+    if (!password) throw new Error('Sesi sudah tidak aktif, silakan login ulang sebelum menyimpan.');
+    const { error } = await supabase.rpc('save_profil_step3', {
+      p_nim: nim,
+      p_password: password,
+      p_mentor_nama: data.mentorNama,
+      p_mentor_jabatan: data.mentorJabatan,
+      p_mentor_wa: data.mentorWa,
+      p_mentor_email: data.mentorEmail,
+      p_dpl_nuptk: data.dplNuptk,
+      p_dpl_wa: data.dplWa,
+      p_dpl_email: data.dplEmail,
+    });
+    if (error) throw new Error(error.message || 'Gagal menyimpan Bagian 3.');
+    return true;
+  },
+
   // --- LOGBOOK ---
   getLogbooks: (nim, opts = {}) =>
     swr(`logbooks_${nim}`, () => apiGet('getLogbooks', { nim }), {
@@ -768,6 +839,17 @@ export const theme = {
   },
 };
 
+// Key SESSION_PASSWORD_KEY sengaja disimpan di sessionStorage (BUKAN
+// localStorage seperti SESSION_KEY di atas) -- sessionStorage otomatis
+// hilang saat tab/browser ditutup, tidak ikut ke perangkat lain, dan
+// tidak bertahan selama 7 hari seperti sesi login biasa. Ini dipakai
+// KHUSUS supaya ProfileSetupView bisa memanggil RPC Supabase Bagian 1-3
+// (lihat api.saveProfilStep1/2/3 & getProfilBagian123 di atas), yang
+// perlu password mentah untuk verifikasi NIM+Password di server
+// (aplikasi ini tidak pakai Supabase Auth). Trade-off keamanan yang
+// disengaja & disepakati -- password TIDAK pernah disimpan permanen.
+const SESSION_PASSWORD_KEY = 'sidampak_session_pwd';
+
 export const session = {
   save(nim, nama) {
     localStorage.setItem(SESSION_KEY, JSON.stringify({
@@ -789,8 +871,34 @@ export const session = {
     }
   },
 
+  // Dipanggil SEKALI tepat setelah login berhasil (lihat handleLogin di
+  // App.jsx). Disimpan di sessionStorage, bukan state React biasa,
+  // supaya tetap ada kalau pengguna reload halaman di tab yang sama
+  // (state React hilang saat reload, sessionStorage tidak).
+  savePassword(password) {
+    try {
+      sessionStorage.setItem(SESSION_PASSWORD_KEY, password);
+    } catch (e) {
+      // sessionStorage disabled -- fitur simpan-langsung-Supabase di
+      // ProfileSetupView otomatis akan minta login ulang saat dipakai.
+    }
+  },
+
+  getPassword() {
+    try {
+      return sessionStorage.getItem(SESSION_PASSWORD_KEY) || '';
+    } catch (e) {
+      return '';
+    }
+  },
+
   clear() {
     localStorage.removeItem(SESSION_KEY);
+    try {
+      sessionStorage.removeItem(SESSION_PASSWORD_KEY);
+    } catch (e) {
+      // no-op
+    }
     // Sekalian bersihkan semua cache data DAN draf lokal milik sesi
     // sebelumnya supaya user lain yang login di perangkat yang sama
     // tidak sempat melihat sepintas data/draf bekas milik akun sebelumnya.

@@ -379,7 +379,7 @@ const LoginView = ({ onLogin, themeMode, onToggleTheme }) => {
     try {
       const result = await api.login(nim.trim(), password);
       // result: { nim, nama }
-      onLogin(result.nim, result.nama);
+      onLogin(result.nim, result.nama, password);
     } catch (err) {
       setError(err.message || 'NIM atau kata sandi salah.');
     } finally {
@@ -421,7 +421,7 @@ const LoginView = ({ onLogin, themeMode, onToggleTheme }) => {
         wa: regWa,
       });
       // Register sukses -> langsung login otomatis & lanjut ke Setup Profil.
-      onLogin(result.nim, result.nama);
+      onLogin(result.nim, result.nama, regPassword);
     } catch (err) {
       setRegError(err.message || 'Gagal membuat akun. Coba lagi.');
     } finally {
@@ -643,7 +643,11 @@ const LocationPicker = ({ position, setPosition, setTempLokasi }) => {
 // 3. Profile Setup View
 const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggestions, dosenList, onSave, onBack, showToast }) => {
   const [step, setStep] = useState(1);
-  const [isSaving, setIsSaving] = useState(false);
+  const [isSaving, setIsSaving] = useState(false); // khusus tombol "Simpan Berkas" (Bagian 4, lewat Apps Script)
+  // isSavingStep: loading terpisah per bagian (1/2/3) -- masing-masing
+  // punya tombol "Simpan Bagian Ini" sendiri yang langsung ke Supabase,
+  // TIDAK saling mengunci tombol bagian lain.
+  const [isSavingStep, setIsSavingStep] = useState({ 1: false, 2: false, 3: false });
 
   const fakultasOptions = masterData?.fakultas?.length ? masterData.fakultas : FAKULTAS_LIST_FALLBACK;
   const prodiOptions = masterData?.prodi?.length ? masterData.prodi.map(p => p.nama) : PRODI_LIST_FALLBACK;
@@ -693,6 +697,56 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
     };
   });
   
+  // Bagian 1-3 dimuat ULANG langsung dari Supabase begitu Setup Profil
+  // dibuka (Supabase sekarang sumber kebenaran untuk bagian ini, BUKAN
+  // lagi Apps Script/`userProfile`) -- menimpa field-field terkait di
+  // formData begitu datang. `userProfile` (dari GAS) tetap dipakai untuk
+  // nilai AWAL supaya form tidak kosong sekejap saat loading, dan tetap
+  // satu-satunya sumber untuk `dokumen` (Bagian 4).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const password = session.getPassword();
+      if (!password || !currentNim) {
+        // Tidak ada password di sessionStorage (mis. tab baru/reload
+        // lama) -- form tetap terisi dari userProfile (GAS) seperti
+        // biasa, tapi Bagian 1-3 tidak bisa disimpan sampai login ulang.
+        return;
+      }
+      try {
+        const data = await api.getProfilBagian123(currentNim, password);
+        if (cancelled || !data) return;
+        setFormData(prev => ({
+          ...prev,
+          nama: data.nama ?? prev.nama,
+          wa: data.wa ?? prev.wa,
+          email: data.email ?? prev.email,
+          prodi: data.prodi ?? prev.prodi,
+          fakultas: data.fakultas ?? prev.fakultas,
+          jenisProgram: data.jenisProgram ?? prev.jenisProgram,
+          namaProgram: data.namaProgram ?? prev.namaProgram,
+          mitra: data.mitra ?? prev.mitra,
+          lokasi: data.lokasi ?? prev.lokasi,
+          tglAwal: data.tglAwal ?? prev.tglAwal,
+          tglAkhir: data.tglAkhir ?? prev.tglAkhir,
+          mataKuliah: (Array.isArray(data.mataKuliah) && data.mataKuliah.length > 0) ? data.mataKuliah : prev.mataKuliah,
+          mentorNama: data.mentorNama ?? prev.mentorNama,
+          mentorJabatan: data.mentorJabatan ?? prev.mentorJabatan,
+          mentorWa: data.mentorWa ?? prev.mentorWa,
+          mentorEmail: data.mentorEmail ?? prev.mentorEmail,
+          dplNama: data.dplNama ?? prev.dplNama,
+          dplNuptk: data.dplNuptk ?? prev.dplNuptk,
+          dplWa: data.dplWa ?? prev.dplWa,
+          dplEmail: data.dplEmail ?? prev.dplEmail,
+        }));
+      } catch (err) {
+        showToast(err.message || 'Gagal memuat Bagian 1-3 dari Supabase.', 'error');
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentNim]);
+
   const [newMk, setNewMk] = useState({ kode: '', nama: '', sks: '' });
 
   // State untuk Modal Peta React-Leaflet
@@ -785,6 +839,69 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
   const validateStep3 = () => 
     (!formData.dplWa || String(formData.dplWa || '').startsWith('62')) && 
     (!formData.dplNama || !!formData.dplNuptk);
+
+  // --- Simpan per Bagian -- LANGSUNG ke Supabase (Bagian 1, 2, 3), lihat
+  // api.saveProfilStep1/2/3 & supabase_profil_rpc.sql. Setiap bagian
+  // punya tombol & status loading sendiri-sendiri, tidak perlu menunggu
+  // sampai Bagian 4 untuk tersimpan.
+  const handleSaveStep1 = async () => {
+    if (!validateStep1()) {
+      showToast('Lengkapi data wajib (Nama, WA, Email, Prodi, & Lokasi)', 'error');
+      return;
+    }
+    const password = session.getPassword();
+    if (!password) {
+      showToast('Sesi sudah tidak aktif, silakan login ulang lalu coba lagi.', 'error');
+      return;
+    }
+    setIsSavingStep(prev => ({ ...prev, 1: true }));
+    try {
+      await api.saveProfilStep1(currentNim, password, formData);
+      showToast('Bagian 1 (Data Diri & Penugasan) berhasil disimpan.');
+    } catch (err) {
+      showToast(err.message || 'Gagal menyimpan Bagian 1.', 'error');
+    } finally {
+      setIsSavingStep(prev => ({ ...prev, 1: false }));
+    }
+  };
+
+  const handleSaveStep2 = async () => {
+    const password = session.getPassword();
+    if (!password) {
+      showToast('Sesi sudah tidak aktif, silakan login ulang lalu coba lagi.', 'error');
+      return;
+    }
+    setIsSavingStep(prev => ({ ...prev, 2: true }));
+    try {
+      await api.saveProfilStep2(currentNim, password, formData.mataKuliah);
+      showToast('Bagian 2 (Mata Kuliah) berhasil disimpan.');
+    } catch (err) {
+      showToast(err.message || 'Gagal menyimpan Bagian 2. Pastikan Bagian 1 sudah disimpan.', 'error');
+    } finally {
+      setIsSavingStep(prev => ({ ...prev, 2: false }));
+    }
+  };
+
+  const handleSaveStep3 = async () => {
+    if (!validateStep3()) {
+      showToast('Cek kembali format WA dan NUPTK DPL', 'error');
+      return;
+    }
+    const password = session.getPassword();
+    if (!password) {
+      showToast('Sesi sudah tidak aktif, silakan login ulang lalu coba lagi.', 'error');
+      return;
+    }
+    setIsSavingStep(prev => ({ ...prev, 3: true }));
+    try {
+      await api.saveProfilStep3(currentNim, password, formData);
+      showToast('Bagian 3 (Mentor & DPL) berhasil disimpan.');
+    } catch (err) {
+      showToast(err.message || 'Gagal menyimpan Bagian 3.', 'error');
+    } finally {
+      setIsSavingStep(prev => ({ ...prev, 3: false }));
+    }
+  };
 
   const openMapPicker = () => {
     if (formData.lokasi) {
@@ -1128,39 +1245,56 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
 
       </div>
 
-      <div className="p-6 bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700 flex gap-4 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.05)] relative z-20">
-        {step > 1 && (
-          <button onClick={() => setStep(step - 1)} disabled={isSaving} className="px-6 py-4 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-2xl hover:bg-slate-200 dark:bg-slate-600 transition-colors disabled:opacity-50">
-            Kembali
+      <div className="p-6 bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700 flex flex-col gap-3 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.05)] relative z-20">
+        {/* Tombol "Simpan Bagian Ini" -- Bagian 1, 2, 3 langsung ke Supabase,
+            terpisah dari navigasi Kembali/Lanjut di bawahnya. Bagian 4 tidak
+            punya tombol ini -- ia sudah punya "Simpan Berkas" sendiri di
+            baris navigasi (lewat Apps Script, perlu upload ke Drive). */}
+        {step < 4 && (
+          <button
+            onClick={step === 1 ? handleSaveStep1 : step === 2 ? handleSaveStep2 : handleSaveStep3}
+            disabled={isSavingStep[step]}
+            className="w-full py-3.5 font-bold rounded-2xl border-2 border-indigo-200 dark:border-indigo-500/40 text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors flex justify-center items-center gap-2 disabled:opacity-60"
+          >
+            {isSavingStep[step] ? <><ButtonSpinner /> Menyimpan Bagian {step}...</> : <><CheckCircle className="w-4 h-4" /> Simpan Bagian Ini</>}
           </button>
         )}
-        {step < 4 ? (
-          <button 
-            onClick={() => {
-              if (step === 1 && !validateStep1()) { 
-                showToast('Lengkapi data wajib (Nama, WA, Email, Prodi, & Lokasi)', 'error'); 
-                return; 
-              }
-              if (step === 3 && !validateStep3()) {
-                showToast('Cek kembali format WA dan NUPTK DPL', 'error');
-                return;
-              }
-              setStep(step + 1);
-            }} 
-            className={`flex-1 py-4 font-bold rounded-2xl text-white shadow-lg transition-all flex justify-center items-center gap-2
-              ${(step === 1 && !validateStep1()) ? 'bg-slate-300 shadow-none' : 'bg-slate-900 shadow-slate-900/20 hover:bg-slate-800 active:scale-95'}`}
-          >
-            Lanjut Langkah {step + 1} <ChevronRight className="w-5 h-5" />
-          </button>
-        ) : (
-          <button 
-            onClick={handleFinalSave} 
-            disabled={isSaving}
-            className="flex-1 py-4 font-bold rounded-2xl text-white shadow-lg transition-all flex justify-center items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-500 dark:from-emerald-400 dark:to-teal-400 shadow-emerald-500/30 dark:shadow-emerald-400/20 hover:shadow-emerald-500/50 dark:hover:shadow-emerald-400/40 active:scale-95 disabled:opacity-70"
-          >
-            {isSaving ? <><ButtonSpinner /> Menyimpan...</> : <><CheckCircle className="w-5 h-5" /> Simpan Profil</>}
-          </button>
-        )}
+
+        <div className="flex gap-4">
+          {step > 1 && (
+            <button onClick={() => setStep(step - 1)} disabled={isSaving || isSavingStep[step]} className="px-6 py-4 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-2xl hover:bg-slate-200 dark:bg-slate-600 transition-colors disabled:opacity-50">
+              Kembali
+            </button>
+          )}
+          {step < 4 ? (
+            <button 
+              onClick={() => {
+                if (step === 1 && !validateStep1()) { 
+                  showToast('Lengkapi data wajib (Nama, WA, Email, Prodi, & Lokasi)', 'error'); 
+                  return; 
+                }
+                if (step === 3 && !validateStep3()) {
+                  showToast('Cek kembali format WA dan NUPTK DPL', 'error');
+                  return;
+                }
+                setStep(step + 1);
+              }} 
+              disabled={isSavingStep[step]}
+              className={`flex-1 py-4 font-bold rounded-2xl text-white shadow-lg transition-all flex justify-center items-center gap-2 disabled:opacity-60
+                ${(step === 1 && !validateStep1()) ? 'bg-slate-300 shadow-none' : 'bg-slate-900 shadow-slate-900/20 hover:bg-slate-800 active:scale-95'}`}
+            >
+              Lanjut Langkah {step + 1} <ChevronRight className="w-5 h-5" />
+            </button>
+          ) : (
+            <button 
+              onClick={handleFinalSave} 
+              disabled={isSaving}
+              className="flex-1 py-4 font-bold rounded-2xl text-white shadow-lg transition-all flex justify-center items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-500 dark:from-emerald-400 dark:to-teal-400 shadow-emerald-500/30 dark:shadow-emerald-400/20 hover:shadow-emerald-500/50 dark:hover:shadow-emerald-400/40 active:scale-95 disabled:opacity-70"
+            >
+              {isSaving ? <><ButtonSpinner /> Menyimpan...</> : <><CheckCircle className="w-5 h-5" /> Simpan Berkas</>}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* MODAL MAP PICKER (REACT-LEAFLET) */}
@@ -1233,7 +1367,13 @@ const DashboardView = ({ profile, logbooks, isLogbooksLoading, isLaporanLoading,
     return profile.mataKuliah.map(mk => {
       const targetHours = parseInt(mk.sks) * 45;
       const currentHours = logbooks.reduce((total, lb) => {
-        const mapped = lb.pemetaanMk?.find(m => m.mkId === mk.id);
+        // PENTING: cocokkan pakai kodeMk (Kode MK, stabil), BUKAN mkId
+        // (ID baris MkRekognisi di database). ID baris berubah setiap
+        // Bagian 2 disimpan ulang (lihat save_profil_step2), jadi kalau
+        // dipakai sebagai kunci pemetaan, semua logbook lama akan
+        // kehilangan pemetaannya begitu mahasiswa simpan ulang MK
+        // rekognisi -- bahkan tanpa ada perubahan sama sekali.
+        const mapped = lb.pemetaanMk?.find(m => m.kodeMk === mk.kode);
         return total + (mapped && lb.status !== 'Draf' ? Number(mapped.jam) : 0);
       }, 0);
       const percentage = Math.min(100, Math.round((currentHours / targetHours) * 100)) || 0;
@@ -1706,7 +1846,10 @@ const LogbookTableView = ({ logbooks, onBack, profile, onEditLogbook, onDeleteLo
   const formatPemetaan = (pemetaanMk) => {
     if (!pemetaanMk || pemetaanMk.length === 0) return '-';
     return pemetaanMk.map(pem => {
-      const mk = profile?.mataKuliah?.find(m => m.id === pem.mkId);
+      // Cocokkan pakai kodeMk (stabil), bukan mkId (ID baris, berubah
+      // tiap Bagian 2 disimpan ulang) -- lihat catatan di mkProgress
+      // DashboardView.
+      const mk = profile?.mataKuliah?.find(m => m.kode === pem.kodeMk);
       return mk ? `${mk.nama} (${pem.jam} Jam)` : `Unknown (${pem.jam} Jam)`;
     }).join(', ');
   };
@@ -1715,10 +1858,10 @@ const LogbookTableView = ({ logbooks, onBack, profile, onEditLogbook, onDeleteLo
     if (!profile?.mataKuliah) return [];
     return profile.mataKuliah.map(mk => {
       const targetHours = parseInt(mk.sks) * 45;
-      const logbooksTerkait = logbooks.filter(lb => lb.status !== 'Draf' && lb.pemetaanMk?.some(m => m.mkId === mk.id));
+      const logbooksTerkait = logbooks.filter(lb => lb.status !== 'Draf' && lb.pemetaanMk?.some(m => m.kodeMk === mk.kode));
       
       const currentHours = logbooksTerkait.reduce((total, lb) => {
-        const mapped = lb.pemetaanMk?.find(m => m.mkId === mk.id);
+        const mapped = lb.pemetaanMk?.find(m => m.kodeMk === mk.kode);
         return total + (mapped ? Number(mapped.jam) : 0);
       }, 0);
       
@@ -2274,11 +2417,14 @@ const LogbookFormView = ({ profile, onSave, onSaveLocalDraft, onDiscardLocalDraf
     setFormData(prev => ({ ...prev, deskripsi: text }));
   };
 
-  const handleMkMapChange = (mkId, jamStr) => {
+  // Dipetakan pakai kodeMk (Kode MK, stabil) -- BUKAN mkId (ID baris
+  // MkRekognisi, berubah tiap Bagian 2 disimpan ulang lewat
+  // save_profil_step2). Lihat catatan di DashboardView.mkProgress.
+  const handleMkMapChange = (kodeMk, jamStr) => {
     const jam = parseInt(jamStr) || 0;
     setFormData(prev => {
-      const existing = prev.pemetaanMk.filter(m => m.mkId !== mkId);
-      if (jam > 0) existing.push({ mkId, jam });
+      const existing = prev.pemetaanMk.filter(m => m.kodeMk !== kodeMk);
+      if (jam > 0) existing.push({ kodeMk, jam });
       return { ...prev, pemetaanMk: existing };
     });
   };
@@ -2448,7 +2594,7 @@ const LogbookFormView = ({ profile, onSave, onSaveLocalDraft, onDiscardLocalDraf
               
               <div className="space-y-3 mt-4">
                 {profile.mataKuliah.map(mk => {
-                  const mappedVal = formData.pemetaanMk.find(m => m.mkId === mk.id)?.jam || '';
+                  const mappedVal = formData.pemetaanMk.find(m => m.kodeMk === mk.kode)?.jam || '';
                   return (
                     <div key={mk.id} className="flex items-center gap-3 bg-white dark:bg-slate-800 p-3 rounded-xl border border-indigo-50 shadow-sm">
                       <span className="flex-1 text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{mk.nama}</span>
@@ -2458,7 +2604,7 @@ const LogbookFormView = ({ profile, onSave, onSaveLocalDraft, onDiscardLocalDraf
                         className="w-16 p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg text-center font-bold text-indigo-600 outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50" 
                         placeholder="0" 
                         value={mappedVal}
-                        onChange={(e) => handleMkMapChange(mk.id, e.target.value)}
+                        onChange={(e) => handleMkMapChange(mk.kode, e.target.value)}
                       />
                     </div>
                   );
@@ -2938,8 +3084,12 @@ export default function App() {
     }
   };
 
-  const handleLogin = (nim, nama) => {
+  const handleLogin = (nim, nama, password) => {
     session.save(nim, nama);
+    // Disimpan HANYA di sessionStorage (hilang saat tab ditutup) --
+    // dipakai ProfileSetupView untuk memanggil RPC Supabase Bagian 1-3
+    // (lihat api.saveProfilStep1/2/3 & session.savePassword di api.js).
+    if (password) session.savePassword(password);
     setUser({ nim, nama });
     showToast('Login berhasil!');
     setLocalDraftsList(localDrafts.list(nim));
