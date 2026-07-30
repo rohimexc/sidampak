@@ -129,6 +129,11 @@ async function swr(key, fetcher, { onCacheHit, maxAgeMs = 5 * 60 * 1000 } = {}) 
 export const api = {
   login: (nim, password) => apiGet('login', { nim, password }),
   register: (payload) => apiPost('register', payload),
+  // Lupa Sandi -- link reset dikirim ke WA yang sudah terdaftar (lihat
+  // handleRequestPasswordReset_/handleResetPassword_ di Api.gs, dan
+  // password_reset.sql untuk rate-limit + token sekali pakainya).
+  requestPasswordReset: (nim) => apiPost('requestPasswordReset', { nim }),
+  resetPassword: (token, newPassword) => apiPost('resetPassword', { token, newPassword }),
 
   // --- PROFIL ---
   // getProfile menerima opsi onCacheHit supaya pemanggil bisa render

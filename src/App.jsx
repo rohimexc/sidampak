@@ -420,6 +420,12 @@ const LoginView = ({ onLogin, themeMode, onToggleTheme }) => {
   const [regError, setRegError] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
 
+  // --- State form Lupa Sandi ---
+  const [forgotNim, setForgotNim] = useState('');
+  const [forgotError, setForgotError] = useState('');
+  const [forgotSuccess, setForgotSuccess] = useState('');
+  const [isSendingReset, setIsSendingReset] = useState(false);
+
   // Warm-up GAS begitu LoginView pertama tampil -- mahasiswa biasanya
   // perlu beberapa detik untuk mengetik NIM & password, waktu itu cukup
   // untuk "memanaskan" instance GAS di belakang sebelum tombol Mulai
@@ -446,6 +452,25 @@ const LoginView = ({ onLogin, themeMode, onToggleTheme }) => {
       setError(err.message || 'NIM atau kata sandi salah.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleForgotSubmit = async (e) => {
+    e.preventDefault();
+    if (!forgotNim.trim()) {
+      setForgotError('NIM wajib diisi.');
+      return;
+    }
+    setForgotError('');
+    setForgotSuccess('');
+    setIsSendingReset(true);
+    try {
+      const result = await api.requestPasswordReset(forgotNim.trim());
+      setForgotSuccess(result.message || 'Link reset sudah dikirim ke WhatsApp terdaftar Anda.');
+    } catch (err) {
+      setForgotError(err.message || 'Gagal mengirim link reset.');
+    } finally {
+      setIsSendingReset(false);
     }
   };
 
@@ -524,7 +549,8 @@ const LoginView = ({ onLogin, themeMode, onToggleTheme }) => {
         
         <div className="w-full bg-white dark:bg-slate-800 rounded-[2rem] shadow-2xl shadow-indigo-900/10 p-8 border border-slate-100 dark:border-slate-700">
 
-          {/* TOGGLE LOGIN / REGISTER */}
+          {/* TOGGLE LOGIN / REGISTER -- disembunyikan saat mode Lupa Sandi */}
+          {mode !== 'forgot' && (
           <div className="bg-slate-100 dark:bg-slate-700 rounded-2xl p-1 flex gap-1 mb-6">
             <button
               type="button"
@@ -541,6 +567,7 @@ const LoginView = ({ onLogin, themeMode, onToggleTheme }) => {
               Daftar
             </button>
           </div>
+          )}
 
           {mode === 'login' ? (
             <div className="animate-in fade-in slide-in-from-left-2 duration-300">
@@ -565,6 +592,15 @@ const LoginView = ({ onLogin, themeMode, onToggleTheme }) => {
                   icon={Lock}
                   disabled={isSubmitting}
                 />
+                <div className="text-right -mt-2">
+                  <button
+                    type="button"
+                    onClick={() => { setMode('forgot'); setForgotError(''); setForgotSuccess(''); }}
+                    className="text-xs font-bold text-indigo-600 dark:text-indigo-300 hover:text-indigo-700 dark:hover:text-indigo-200 transition-colors"
+                  >
+                    Lupa Sandi?
+                  </button>
+                </div>
                 <button 
                   type="submit" 
                   disabled={isSubmitting}
@@ -586,6 +622,56 @@ const LoginView = ({ onLogin, themeMode, onToggleTheme }) => {
                   </button>
                 </p>
               </div>
+            </div>
+          ) : mode === 'forgot' ? (
+            <div className="animate-in fade-in slide-in-from-left-2 duration-300">
+              <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2 text-center">Lupa Kata Sandi</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 text-center mb-6 leading-relaxed">
+                Masukkan NIM Anda. Link untuk mengatur kata sandi baru akan dikirim ke nomor WhatsApp yang terdaftar (berlaku 15 menit).
+              </p>
+
+              {forgotSuccess ? (
+                <div className="text-center space-y-5">
+                  <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-500/20 rounded-2xl flex items-center justify-center mx-auto">
+                    <FaWhatsapp className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <p className="text-sm text-slate-600 dark:text-slate-300 font-medium leading-relaxed">{forgotSuccess}</p>
+                  <button
+                    type="button"
+                    onClick={() => { setMode('login'); setForgotSuccess(''); setForgotNim(''); }}
+                    className="w-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold p-4 rounded-2xl hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                  >
+                    Kembali ke Login
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleForgotSubmit} className="w-full space-y-5">
+                  <Input
+                    label="Nomor Induk Mahasiswa (NIM)"
+                    placeholder="Contoh: G20118043"
+                    value={forgotNim}
+                    onChange={(e) => setForgotNim(e.target.value)}
+                    error={forgotError}
+                    icon={User}
+                    disabled={isSendingReset}
+                  />
+                  <button
+                    type="submit"
+                    disabled={isSendingReset}
+                    className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 dark:from-indigo-800 dark:to-blue-800 text-white font-bold p-4 rounded-2xl mt-4 hover:shadow-lg hover:shadow-indigo-500/30 dark:hover:shadow-indigo-500/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-70"
+                  >
+                    {isSendingReset ? <><ButtonSpinner /> Mengirim...</> : 'Kirim Link Reset ke WhatsApp'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setMode('login'); setForgotError(''); }}
+                    disabled={isSendingReset}
+                    className="w-full text-center text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors py-1"
+                  >
+                    Kembali ke Login
+                  </button>
+                </form>
+              )}
             </div>
           ) : (
             <div className="animate-in fade-in slide-in-from-right-2 duration-300">
@@ -702,6 +788,114 @@ const LocationPicker = ({ position, setPosition, setTempLokasi }) => {
     <Marker position={position} icon={customMarkerIcon} />
   );
 };
+// 2b. Reset Password View (dibuka lewat link dari WhatsApp: ?resetToken=...)
+const ResetPasswordView = ({ token, onDone }) => {
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [success, setSuccess] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!newPassword || newPassword.length < 6) {
+      setError('Kata sandi baru minimal 6 karakter.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError('Konfirmasi kata sandi tidak cocok.');
+      return;
+    }
+    setError('');
+    setIsSubmitting(true);
+    try {
+      await api.resetPassword(token, newPassword);
+      setSuccess(true);
+    } catch (err) {
+      // Termasuk kasus link kadaluarsa (15 menit) / sudah pernah dipakai --
+      // lihat handleResetPassword_ di Api.gs untuk pesan persisnya.
+      setError(err.message || 'Gagal mengatur kata sandi baru. Link mungkin sudah kadaluarsa.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900 relative overflow-hidden">
+      <div className="absolute top-0 left-0 w-full h-[450px] bg-gradient-to-br from-indigo-600 via-blue-600 to-indigo-800 dark:from-slate-800 dark:via-indigo-950 dark:to-slate-900 rounded-b-[3rem] shadow-lg dark:shadow-indigo-900/20 transform -skew-y-6 -translate-y-24"></div>
+
+      <div className="flex-1 flex flex-col items-center justify-center p-8 relative z-10 overflow-y-auto">
+        <div className="w-20 h-20 bg-white/90 backdrop-blur-xl rounded-3xl flex items-center justify-center mb-6 shadow-2xl border border-white/30 ring-4 ring-white/10 shrink-0">
+          <Lock className="w-9 h-9 text-indigo-600" />
+        </div>
+
+        <div className="text-center mb-8 shrink-0">
+          <h1 className="text-2xl font-black text-white tracking-tight mb-2 drop-shadow-md">Atur Kata Sandi Baru</h1>
+          <p className="text-indigo-100 font-medium text-sm leading-relaxed px-2">SIDAMPAK -- Universitas Tadulako</p>
+        </div>
+
+        <div className="w-full max-w-sm bg-white dark:bg-slate-800 rounded-[2rem] shadow-2xl shadow-indigo-900/10 p-8 border border-slate-100 dark:border-slate-700">
+          {success ? (
+            <div className="text-center space-y-5">
+              <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-500/20 rounded-2xl flex items-center justify-center mx-auto">
+                <CheckCircle className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <p className="text-sm text-slate-600 dark:text-slate-300 font-medium leading-relaxed">
+                Kata sandi berhasil diubah. Silakan masuk dengan kata sandi baru Anda.
+              </p>
+              <button
+                type="button"
+                onClick={onDone}
+                className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 dark:from-indigo-800 dark:to-blue-800 text-white font-bold p-4 rounded-2xl hover:shadow-lg hover:shadow-indigo-500/30 transition-all active:scale-[0.98]"
+              >
+                Ke Halaman Login
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="w-full space-y-5">
+              <Input
+                label="Kata Sandi Baru"
+                type="password"
+                placeholder="Minimal 6 karakter"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                error={error.includes('minimal') ? " " : ""}
+                icon={Lock}
+                disabled={isSubmitting}
+              />
+              <Input
+                label="Konfirmasi Kata Sandi Baru"
+                type="password"
+                placeholder="Ulangi kata sandi baru"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                error={error}
+                icon={Lock}
+                disabled={isSubmitting}
+              />
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 dark:from-indigo-800 dark:to-blue-800 text-white font-bold p-4 rounded-2xl mt-4 hover:shadow-lg hover:shadow-indigo-500/30 dark:hover:shadow-indigo-500/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-70"
+              >
+                {isSubmitting ? <><ButtonSpinner /> Menyimpan...</> : 'Simpan Kata Sandi Baru'}
+              </button>
+              <button
+                type="button"
+                onClick={onDone}
+                disabled={isSubmitting}
+                className="w-full text-center text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors py-1"
+              >
+                Batal, kembali ke Login
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // 3. Profile Setup View
 const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggestions, dosenList, onSave, onBagianSaved, onBack, showToast }) => {
   const [step, setStep] = useState(1);
@@ -2955,6 +3149,10 @@ const LaporanAkhirView = ({ laporanData, onSave, onBack, showToast, onDelete }) 
 // sekali, kecuali 1 baris redirect untuk magic link LAMA di bawah.
 export default function App() {
   const [view, setView] = useState('loading'); 
+  // Token dari link "Lupa Sandi" (?resetToken=...) -- lihat useEffect di
+  // bawah & ResetPasswordView. Terpisah dari `token` (magic link
+  // reviewer, sudah redirect ke reviewer.html) supaya tidak tertukar.
+  const [resetToken, setResetToken] = useState('');
   const [user, setUser] = useState(null);  // { nim, nama }
   const [profile, setProfile] = useState(null);
   const [logbooks, setLogbooks] = useState([]);
@@ -3038,6 +3236,16 @@ export default function App() {
       // seharusnya sudah langsung mengarah ke reviewer.html?token=...
       // (lihat FRONTEND_BASE_URL_/buildReviewerMagicLink_ di Api.gs).
       window.location.replace('/reviewer.html?token=' + encodeURIComponent(token));
+      return;
+    }
+
+    const resetTokenParam = params.get('resetToken');
+    if (resetTokenParam) {
+      // Link "Lupa Sandi" dari WhatsApp -- tampilkan form atur kata
+      // sandi baru, LEWATI pengecekan sesi login di bawah (mahasiswa
+      // belum tentu, dan tidak perlu, login untuk reset kata sandi).
+      setResetToken(resetTokenParam);
+      setView('resetPassword');
       return;
     }
 
@@ -3348,6 +3556,19 @@ export default function App() {
         {view === 'loading' && <PageLoader label="Memuat Sistem..." />}
         {view === 'loadingDashboard' && <PageLoader label="Mengambil data profil..." />}
         {view === 'login' && <LoginView onLogin={handleLogin} themeMode={themeMode} onToggleTheme={toggleTheme} />}
+        {view === 'resetPassword' && (
+          <ResetPasswordView
+            token={resetToken}
+            onDone={() => {
+              // Bersihkan ?resetToken=... dari address bar supaya kalau
+              // halaman di-refresh/link dibagikan lagi, tidak nyangkut di
+              // form reset yang sama (token sekali pakai sudah terpakai).
+              window.history.replaceState({}, '', window.location.pathname);
+              setResetToken('');
+              setView('login');
+            }}
+          />
+        )}
         
         {view === 'setup' && (
           <ProfileSetupView 
