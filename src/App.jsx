@@ -225,9 +225,22 @@ const Toast = ({ message, type = 'success', onClose }) => {
 
   if (!message) return null;
 
+  // Toast error (mis. Kode MK duplikat, validasi gagal, dll) ditampilkan
+  // DI TENGAH layar supaya lebih kelihatan/tidak terlewat -- toast sukses
+  // tetap di atas seperti biasa (tidak mengganggu, konfirmasi ringan).
+  const isError = type === 'error';
+
   return (
-    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-top-4 fade-in duration-300 w-11/12 max-w-sm pointer-events-none">
-      <div className="bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl text-sm font-medium flex items-center gap-3 border border-slate-700/50 backdrop-blur-md">
+    <div className={
+      isError
+        ? "fixed inset-0 z-50 flex items-center justify-center px-6 pointer-events-none"
+        : "absolute top-4 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-top-4 fade-in duration-300 w-11/12 max-w-sm pointer-events-none"
+    }>
+      <div className={
+        isError
+          ? "bg-slate-900 text-white px-5 py-4 rounded-2xl shadow-2xl text-sm font-medium flex items-center gap-3 border border-slate-700/50 backdrop-blur-md w-11/12 max-w-sm animate-in zoom-in-95 fade-in duration-200"
+          : "bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl text-sm font-medium flex items-center gap-3 border border-slate-700/50 backdrop-blur-md"
+      }>
         {type === 'success' ? <CheckCircle className="w-6 h-6 text-emerald-400 shrink-0" /> : <AlertCircle className="w-6 h-6 text-rose-400 shrink-0" />}
         <span className="leading-tight">{message}</span>
       </div>
@@ -825,6 +838,18 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
 
   const addMataKuliah = () => {
     if (newMk.kode && newMk.nama && newMk.sks) {
+      // Tolak Kode MK duplikat DI SINI juga (bukan cuma di server saat
+      // "Simpan Bagian Ini") -- supaya mahasiswa langsung tahu saat itu
+      // juga, bukan baru ketahuan setelah sempat masuk ke "Daftar
+      // Tersimpan" lalu ditolak RPC save_profil_step2. Perbandingan
+      // tanpa peduli besar/kecil huruf & spasi di ujung supaya "IF101"
+      // dan "if101 " juga dianggap sama.
+      const kodeBaru = newMk.kode.trim().toLowerCase();
+      const sudahAda = formData.mataKuliah.some(mk => String(mk.kode || '').trim().toLowerCase() === kodeBaru);
+      if (sudahAda) {
+        showToast(`Kode MK "${newMk.kode}" sudah ada di daftar.`, 'error');
+        return;
+      }
       handleChange('mataKuliah', [...formData.mataKuliah, { ...newMk, id: generateId() }]);
       setNewMk({ kode: '', nama: '', sks: '' });
       showToast('Mata kuliah berhasil ditambahkan.');
