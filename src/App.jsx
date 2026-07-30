@@ -55,6 +55,55 @@ const KEGIATAN_DEFAULT = [
 
 // --- UTILITIES ---
 const generateId = () => Math.random().toString(36).substr(2, 9);
+
+// ---------------------------------------------------------------------
+// Menggabungkan data Bagian 1-3 (sumber: Supabase, lihat
+// api.getProfilBagian123) ke atas objek profil dari GAS (`base` --
+// boleh null/belum lengkap). Dipakai di loadUserData supaya Dashboard,
+// LogbookFormView, dsb ikut melihat data terbaru yang disimpan lewat
+// tombol "Simpan Bagian Ini" di ProfileSetupView -- BUKAN cuma
+// ProfileSetupView sendiri. Field yang TIDAK dikelola Supabase (mis.
+// `dokumen`, status review, dsb) dibiarkan apa adanya dari `base`.
+//
+// Gagal-aman: kalau sesi Supabase tidak ada (password belum/sudah tidak
+// tersimpan) atau RPC gagal, kembalikan `base` apa adanya -- dashboard
+// tetap tampil pakai data GAS terakhir yang diketahui, tidak pernah
+// gagal render gara-gara ini.
+// ---------------------------------------------------------------------
+async function mergeSupabaseBagian123(base, nim) {
+  const password = session.getPassword();
+  if (!password || !nim) return base;
+  try {
+    const sb = await api.getProfilBagian123(nim, password);
+    if (!sb) return base;
+    return {
+      ...(base || {}),
+      nim: (base && base.nim) || sb.nim || nim,
+      nama: sb.nama ?? base?.nama,
+      wa: sb.wa ?? base?.wa,
+      email: sb.email ?? base?.email,
+      prodi: sb.prodi ?? base?.prodi,
+      fakultas: sb.fakultas ?? base?.fakultas,
+      jenisProgram: sb.jenisProgram ?? base?.jenisProgram,
+      namaProgram: sb.namaProgram ?? base?.namaProgram,
+      mitra: sb.mitra ?? base?.mitra,
+      lokasi: sb.lokasi ?? base?.lokasi,
+      tglAwal: sb.tglAwal ?? base?.tglAwal,
+      tglAkhir: sb.tglAkhir ?? base?.tglAkhir,
+      mataKuliah: (Array.isArray(sb.mataKuliah) && sb.mataKuliah.length > 0) ? sb.mataKuliah : (base?.mataKuliah || []),
+      mentorNama: sb.mentorNama ?? base?.mentorNama,
+      mentorJabatan: sb.mentorJabatan ?? base?.mentorJabatan,
+      mentorWa: sb.mentorWa ?? base?.mentorWa,
+      mentorEmail: sb.mentorEmail ?? base?.mentorEmail,
+      dplNama: sb.dplNama ?? base?.dplNama,
+      dplNuptk: sb.dplNuptk ?? base?.dplNuptk,
+      dplWa: sb.dplWa ?? base?.dplWa,
+      dplEmail: sb.dplEmail ?? base?.dplEmail,
+    };
+  } catch (err) {
+    return base;
+  }
+}
 const getWitaDateString = () => {
   const d = new Date();
   const witaTime = new Date(d.getTime() + (8 * 60 * 60 * 1000));
@@ -641,7 +690,7 @@ const LocationPicker = ({ position, setPosition, setTempLokasi }) => {
   );
 };
 // 3. Profile Setup View
-const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggestions, dosenList, onSave, onBack, showToast }) => {
+const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggestions, dosenList, onSave, onBagianSaved, onBack, showToast }) => {
   const [step, setStep] = useState(1);
   const [isSaving, setIsSaving] = useState(false); // khusus tombol "Simpan Berkas" (Bagian 4, lewat Apps Script)
   // isSavingStep: loading terpisah per bagian (1/2/3) -- masing-masing
@@ -858,6 +907,15 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
     try {
       await api.saveProfilStep1(currentNim, password, formData);
       showToast('Bagian 1 (Data Diri & Penugasan) berhasil disimpan.');
+      // Kabari App.jsx supaya Dashboard dkk langsung lihat data terbaru
+      // ini -- tanpa ini, Dashboard tetap pakai data lama sampai reload.
+      onBagianSaved?.({
+        nama: formData.nama, wa: formData.wa, email: formData.email,
+        prodi: formData.prodi, fakultas: formData.fakultas,
+        jenisProgram: formData.jenisProgram, namaProgram: formData.namaProgram,
+        mitra: formData.mitra, lokasi: formData.lokasi,
+        tglAwal: formData.tglAwal, tglAkhir: formData.tglAkhir,
+      });
     } catch (err) {
       showToast(err.message || 'Gagal menyimpan Bagian 1.', 'error');
     } finally {
@@ -875,6 +933,7 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
     try {
       await api.saveProfilStep2(currentNim, password, formData.mataKuliah);
       showToast('Bagian 2 (Mata Kuliah) berhasil disimpan.');
+      onBagianSaved?.({ mataKuliah: formData.mataKuliah });
     } catch (err) {
       showToast(err.message || 'Gagal menyimpan Bagian 2. Pastikan Bagian 1 sudah disimpan.', 'error');
     } finally {
@@ -896,6 +955,12 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
     try {
       await api.saveProfilStep3(currentNim, password, formData);
       showToast('Bagian 3 (Mentor & DPL) berhasil disimpan.');
+      onBagianSaved?.({
+        mentorNama: formData.mentorNama, mentorJabatan: formData.mentorJabatan,
+        mentorWa: formData.mentorWa, mentorEmail: formData.mentorEmail,
+        dplNama: formData.dplNama, dplNuptk: formData.dplNuptk,
+        dplWa: formData.dplWa, dplEmail: formData.dplEmail,
+      });
     } catch (err) {
       showToast(err.message || 'Gagal menyimpan Bagian 3.', 'error');
     } finally {
@@ -2994,6 +3059,9 @@ export default function App() {
       onCacheHit: (cached) => {
         if (!cached) return;
         gotProfileCacheHit = true;
+        // Cache-hit render instan pakai data GAS apa adanya dulu (belum
+        // digabung Supabase) supaya tetap terasa instan -- begitu fetch
+        // fresh di bawah selesai, setProfile akan ditimpa versi gabungan.
         setProfile(cached);
         
         // CEK KELENGKAPAN PROFIL DARI CACHE
@@ -3050,9 +3118,20 @@ export default function App() {
     }
 
     try {
-      const profileData = await profilePromise;
+      const profileDataRaw = await profilePromise;
 
-      if (!profileData) {
+      // Gabungkan Bagian 1-3 dari Supabase DI ATAS data GAS -- ini yang
+      // tadinya hilang: mahasiswa yang mengisi Bagian 1-3 lewat tombol
+      // "Simpan Bagian Ini" (langsung ke Supabase) tapi belum pernah
+      // menekan "Simpan Berkas" (Bagian 4, lewat GAS) akan punya
+      // `profileDataRaw` null/tidak lengkap dari GAS -- padahal
+      // Supabase-nya sudah lengkap. Tanpa penggabungan ini, Dashboard
+      // (dan validasi kelengkapan profil di bawah) salah mengira profil
+      // belum diisi sama sekali.
+      const profileData = await mergeSupabaseBagian123(profileDataRaw || { nim }, nim);
+      const hasAnyProfileData = profileData && (profileData.nama || profileData.email || profileData.prodi);
+
+      if (!hasAnyProfileData) {
         // Belum pernah isi profil sama sekali -> arahkan ke setup
         setProfile(null);
         setLogbooks([]);
@@ -3145,6 +3224,16 @@ export default function App() {
       showToast(err.message || 'Gagal menyimpan profil.', 'error');
       throw err; // supaya ProfileSetupView tahu submit gagal & berhenti loading
     }
+  };
+
+  // Dipanggil ProfileSetupView SETELAH Bagian 1/2/3 berhasil disimpan
+  // langsung ke Supabase -- supaya `profile` di sini (dipakai Dashboard,
+  // LogbookFormView, dst) ikut ter-update SEKARANG JUGA, tanpa menunggu
+  // reload/loadUserData berikutnya. Tanpa ini, Dashboard bisa terlihat
+  // "kosong" walau Bagian 2 baru saja berhasil disimpan (data ada di
+  // Supabase, tapi `profile` di App.jsx belum tahu).
+  const handleBagianSaved = (partial) => {
+    setProfile(prev => ({ ...(prev || { nim: user?.nim }), ...partial }));
   };
 
   // saveLogbook mengirim foto sebagai data URL base64 (file baru) atau URL
@@ -3243,6 +3332,7 @@ export default function App() {
             programSuggestions={programSuggestions}
             dosenList={dosenList}
             onSave={handleSaveProfile} 
+            onBagianSaved={handleBagianSaved}
             // Tombol "Kembali" hanya muncul kalau profil SUDAH benar-benar lengkap
             onBack={(profile && profile.nama && profile.email && profile.prodi && profile.fakultas && profile.lokasi) ? () => setView('dashboard') : null} 
             showToast={showToast} 
