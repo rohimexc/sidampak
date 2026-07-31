@@ -338,14 +338,32 @@ export const api = {
   // skema tabel berubah lagi nanti.
   getDosenList: (opts = {}) =>
     swr('dosenList', async () => {
-      const { data, error } = await supabase.from('datadosen').select('id, nama_dosen, nuptk, wa, email').order('nama_dosen');
-      if (error) throw new Error(error.message);
-      return (data || []).map((r) => ({ id: r.id, nama: r.nama_dosen, nuptk: r.nuptk, wa: r.wa, email: r.email }));
+      // PENTING: Supabase/PostgREST membatasi SELECT ke maksimal 1000 baris
+      // per request secara default. Kalau datadosen sudah >1000 baris dan
+      // kita cuma .select().order() tanpa .range(), baris di luar 1000
+      // pertama (urut nama_dosen) akan DIAM-DIAM hilang dari hasil --
+      // muncul sebagai "data tidak ditemukan" di form mahasiswa walau
+      // datanya ada di DB. Di bawah ini kita loop pakai .range() sampai
+      // semua baris terambil.
+      const PAGE_SIZE = 1000;
+      let allRows = [];
+      let from = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from('datadosen')
+          .select('id, nama_dosen, nuptk, wa, email')
+          .order('nama_dosen')
+          .range(from, from + PAGE_SIZE - 1);
+        if (error) throw new Error(error.message);
+        allRows = allRows.concat(data || []);
+        if (!data || data.length < PAGE_SIZE) break; // halaman terakhir
+        from += PAGE_SIZE;
+      }
+      return allRows.map((r) => ({ id: r.id, nama: r.nama_dosen, nuptk: r.nuptk, wa: r.wa, email: r.email }));
     }, {
       onCacheHit: opts.onCacheHit,
       maxAgeMs: 24 * 60 * 60 * 1000, // 24 jam
     }),
-
   // --- Kelola data dosen referensi (KHUSUS Admin Fakultas) --- Baca
   // (getDosenList di atas) langsung ke Supabase; tulis (tambah/edit)
   // WAJIB lewat GAS supaya ada validasi & otorisasi role. Setiap aksi
