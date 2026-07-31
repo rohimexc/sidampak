@@ -373,6 +373,9 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
   // Export Excel daftar Mahasiswa Bimbingan (mengikuti hasil search/filter
   // yang sedang aktif) -- 1 sheet, kolom-kolom yang tersedia dari data
   // yang sudah dipunyai reviewer (tanpa perlu fetch tambahan per mahasiswa).
+  // Export Excel daftar Mahasiswa Bimbingan (mengikuti hasil search/filter
+  // yang sedang aktif) -- 2 sheet: (1) Data Mahasiswa lengkap, (2) Detail
+  // MK Rekognisi per mahasiswa.
   const handleExportExcel = () => {
     setIsExporting(true);
     try {
@@ -380,8 +383,12 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
         NIM: m.nim,
         Nama: m.nama,
         Prodi: m.prodi || '-',
-        Mitra: m.mitra || '-',
         WhatsApp: m.wa || '-',
+        'Tanggal Awal Penugasan': formatDateIndoShort(m.tglAwal),
+        'Tanggal Akhir Penugasan': formatDateIndoShort(m.tglAkhir),
+        'Jumlah SKS Rekognisi': (m.mataKuliah || []).reduce((acc, mk) => acc + (Number(mk.sks) || 0), 0),
+        'Jenis Program': m.jenisProgram || '-',
+        Mitra: m.mitra || '-',
         'Jam Tercapai': m.currentHours ?? '-',
         'Target Jam': m.targetHours ?? '-',
         'Progres Jam (%)': m.progressPercentage ?? '-',
@@ -389,6 +396,8 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
         'Perlu Perhatian': m._isAtRisk ? 'Ya' : 'Tidak',
         'Logbook Pending': m._pendingLogCount,
         'Laporan Pending': m._pendingLaporanCount,
+        'Link Laporan': m.laporanFileLink || '-',
+        'Link SK DPL': m.dokumen?.skDpl || '-',
       }));
 
       if (rows.length === 0) {
@@ -399,8 +408,24 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
       const ws = XLSX.utils.json_to_sheet(rows);
       ws['!cols'] = Object.keys(rows[0]).map(() => ({ wch: 18 }));
 
+      // Sheet ke-2: detail MK Rekognisi per mahasiswa
+      const sheetMk = [];
+      filteredMhsList.forEach(m => {
+        (m.mataKuliah || []).forEach(mk => {
+          sheetMk.push({
+            NIM: m.nim,
+            'Nama Lengkap': m.nama,
+            'MK Rekognisi': mk.nama,
+            'Progress MK': mk.percentage,
+          });
+        });
+      });
+      const wsMk = XLSX.utils.json_to_sheet(sheetMk);
+      wsMk['!cols'] = [{ wch: 16 }, { wch: 24 }, { wch: 28 }, { wch: 12 }];
+
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Mahasiswa Bimbingan');
+      XLSX.utils.book_append_sheet(wb, wsMk, 'MK Rekognisi');
 
       const today = new Date().toISOString().slice(0, 10);
       XLSX.writeFile(wb, `Mahasiswa_Bimbingan_${today}.xlsx`);
