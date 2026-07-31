@@ -2603,17 +2603,28 @@ const LogbookTableView = ({ logbooks, onBack, profile, onEditLogbook, onDeleteLo
 const LogbookFormView = ({ profile, onSave, onSaveLocalDraft, onDiscardLocalDraft, onBack, showToast, editingLogbook }) => {
   
   const initialFoto = editingLogbook 
-    ? (Array.isArray(editingLogbook.foto) ? editingLogbook.foto : (editingLogbook.foto ? [editingLogbook.foto] : []))
-    : [];
+  ? (Array.isArray(editingLogbook.foto) ? editingLogbook.foto : (editingLogbook.foto ? [editingLogbook.foto] : []))
+  : [];
 
-  const [formData, setFormData] = useState(editingLogbook ? { ...editingLogbook, foto: initialFoto } : {
-    tanggal: getWitaDateString(),
-    kegiatan: [],
-    durasi: '',
-    deskripsi: '',
-    pemetaanMk: [], 
-    foto: [],
-    status: 'Menunggu Persetujuan Mentor'
+  // Bersihkan pemetaanMk dari kodeMk "yatim" (matkul yang sudah dihapus
+  // dari profil setelah logbook ini pertama kali dibuat) -- dicocokkan
+  // pakai kodeMk (Kode MK, stabil), SAMA seperti field yang dipakai di
+  // handleMkMapChange & tampilan input di bawah. Sebelumnya filter ini
+  // masih memakai mkId (field lama yang sudah tidak pernah ditulis lagi
+  // ke pemetaanMk), sehingga selalu gagal mencocokkan apa pun dan
+  // pemetaan lama selalu hilang setiap logbook dibuka untuk edit.
+  const initialPemetaanMk = editingLogbook?.pemetaanMk
+  ? editingLogbook.pemetaanMk.filter(pm => profile?.mataKuliah?.some(mk => mk.kode === pm.kodeMk))
+  : [];
+
+  const [formData, setFormData] = useState(editingLogbook ? { ...editingLogbook, foto: initialFoto, pemetaanMk: initialPemetaanMk } : {
+  tanggal: getWitaDateString(),
+  kegiatan: [],
+  durasi: '',
+  deskripsi: '',
+  pemetaanMk: [], 
+  foto: [],
+  status: 'Menunggu Persetujuan Mentor'
   });
   
   const [kegiatanOptions, setKegiatanOptions] = useState(KEGIATAN_DEFAULT);

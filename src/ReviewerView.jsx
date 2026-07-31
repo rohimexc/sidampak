@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Lock, ChevronLeft, ChevronRight, CheckCircle, AlertCircle, FileText, BookOpen,
-  Download, Send, Loader2
+  Download, Send, Loader2, Search, MapPin, FileWarning, X
 } from 'lucide-react';
+import { FaWhatsapp } from 'react-icons/fa';
+import * as XLSX from 'xlsx';
 
 import { api } from './api';
 
@@ -61,6 +63,52 @@ const getStatusBadgeClass = (status) => {
   return 'bg-slate-100 text-slate-500';
 };
 
+// Buka WhatsApp Web/App dengan nomor & pesan yang sudah terisi (redaksi
+// siap kirim, mentor/DPL tinggal tekan kirim). Pola sama dengan
+// AdminFakultasView.jsx supaya konsisten se-aplikasi.
+const waLink = (wa, text) => {
+  if (!wa) return null;
+  const number = String(wa).replace(/[^0-9]/g, '');
+  return text ? `https://wa.me/${number}?text=${encodeURIComponent(text)}` : `https://wa.me/${number}`;
+};
+
+// Tanda tangan pesan WA mengikuti role reviewer yang sedang login (Mentor
+// atau DPL) -- reviewerInfo.role dikirim server lewat getReviewerQueue.
+const buildSenderLabel = (reviewerInfo) => {
+  if (!reviewerInfo?.nama) return '';
+  return reviewerInfo.role === 'dpl' ? `DPL ${reviewerInfo.nama}` : `Mentor ${reviewerInfo.nama}`;
+};
+
+// Redaksi pengingat untuk mahasiswa yang logbook-nya masih kurang dari
+// target. Kalau data progres jam/waktu tersedia dari server, disebutkan
+// angka pastinya (lebih meyakinkan); kalau belum tersedia, tetap jatuh
+// ke redaksi umum supaya tombol tetap bisa dipakai.
+const buildReminderMessage = (m, reviewerInfo) => {
+  const adaProgres = typeof m.progressPercentage === 'number';
+  const adaWaktu = typeof m.timePercentage === 'number';
+  const progresLine = adaProgres
+    ? `progres pengisian Logbook Kampus Berdampak Anda saat ini baru ${m.progressPercentage}% dari target jam` +
+      (adaWaktu ? `, sementara waktu penugasan sudah berjalan ${m.timePercentage}%` : '')
+    : `progres pengisian Logbook Kampus Berdampak Anda tampak masih tertinggal dari target`;
+
+  return `Halo ${m.nama} (${m.nim}),\n\n` +
+    `Kami memantau ${progresLine}. Mohon segera dilengkapi agar tidak tertinggal dari jadwal penugasan.\n\n` +
+    `Terima kasih atas perhatian dan kerja samanya.\n\n` +
+    `Salam,\n${buildSenderLabel(reviewerInfo)}`;
+};
+
+// Fallback penentu "Perlu Perhatian" kalau server belum mengirim flag
+// isAtRisk secara eksplisit di getReviewerQueue -- dihitung dari
+// progressPercentage (jam) vs timePercentage (waktu penugasan), sama
+// seperti logika overallProgress di App.jsx (Dashboard Mahasiswa).
+const computeIsAtRisk = (m) => {
+  if (typeof m.isAtRisk === 'boolean') return m.isAtRisk;
+  if (typeof m.progressPercentage === 'number' && typeof m.timePercentage === 'number') {
+    return m.progressPercentage < m.timePercentage;
+  }
+  return false;
+};
+
 const PageLoader = ({ label = 'Memuat data...' }) => (
   <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 h-full">
     <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
@@ -95,6 +143,11 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
   const [selectedLogs, setSelectedLogs] = useState([]);
   const [selectedLaporans, setSelectedLaporans] = useState([]);
   const [isBulkApproving, setIsBulkApproving] = useState(false);
+
+  // --- Search, filter "Perlu Perhatian", & export Excel di tab Mahasiswa ---
+  const [mhsSearchTerm, setMhsSearchTerm] = useState('');
+  const [onlyAtRisk, setOnlyAtRisk] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const hasToken = !!reviewerToken;
 
@@ -250,10 +303,17 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
     }
   };
 
+  // Dicocokkan pakai kodeMk (Kode MK, stabil) -- BUKAN mkId (ID baris
+  // MkRekognisi, berubah tiap Bagian 2 disimpan ulang lewat
+  // save_profil_step2). pemetaanMk sekarang menyimpan { kodeMk, jam },
+  // BUKAN lagi { mkId, jam } -- lihat catatan yang sama di
+  // App.jsx (DashboardView.mkProgress & LogbookFormView.handleMkMapChange).
+  // Tanpa perbaikan ini, reviewer selalu melihat "Unknown MK" untuk
+  // setiap logbook walau datanya valid.
   const getLogMkNames = (log, mataKuliahList) => {
     if (!log.pemetaanMk || !mataKuliahList) return '';
     return log.pemetaanMk.map(pem => {
-      const mk = mataKuliahList.find(m => m.id === pem.mkId);
+      const mk = mataKuliahList.find(m => m.kode === pem.kodeMk);
       return mk ? mk.nama : 'Unknown MK';
     }).join(', ');
   };
@@ -264,13 +324,93 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
     return (mataKuliah || []).map(mk => {
       const targetHours = parseInt(mk.sks) * 45;
       const currentHours = (logbooks || []).reduce((total, lb) => {
-        const mapped = lb.pemetaanMk?.find(m => m.mkId === mk.id);
+        // Sama seperti getLogMkNames di atas -- cocokkan pakai kodeMk,
+        // bukan mkId, supaya capaian SKS di sisi reviewer sinkron dengan
+        // apa yang dilihat mahasiswa di Dashboard-nya sendiri.
+        const mapped = lb.pemetaanMk?.find(m => m.kodeMk === mk.kode);
         return total + (mapped && lb.status !== 'Draf' ? Number(mapped.jam) : 0);
       }, 0);
       const percentage = Math.min(100, Math.round((currentHours / targetHours) * 100)) || 0;
       return { ...mk, targetHours, currentHours, percentage };
     });
   }, [detailData]);
+
+  // Mahasiswa Bimbingan + flag "Perlu Perhatian" (dari server kalau ada,
+  // fallback dihitung sendiri dari progressPercentage vs timePercentage
+  // kalau server belum kirim field isAtRisk -- lihat computeIsAtRisk).
+  // Jumlah logbook/laporan pending dihitung dari antrean yang sudah kita
+  // punya di state (pendingLogs/pendingLaporan), jadi tetap akurat walau
+  // field progres jam dari server belum tersedia.
+  const mhsListEnriched = useMemo(() => {
+    return mhsList.map(m => ({
+      ...m,
+      _isAtRisk: computeIsAtRisk(m),
+      _pendingLogCount: pendingLogs.filter(l => l.nim === m.nim).length,
+      _pendingLaporanCount: pendingLaporan.filter(l => l.nim === m.nim).length,
+    }));
+  }, [mhsList, pendingLogs, pendingLaporan]);
+
+  const atRiskCount = useMemo(() => mhsListEnriched.filter(m => m._isAtRisk).length, [mhsListEnriched]);
+
+  const filteredMhsList = useMemo(() => {
+    const term = (mhsSearchTerm || '').toLowerCase();
+    let rows = mhsListEnriched.filter(m =>
+      (m.nama || '').toLowerCase().includes(term) ||
+      (m.nim || '').toLowerCase().includes(term) ||
+      (m.prodi || '').toLowerCase().includes(term) ||
+      (m.mitra || '').toLowerCase().includes(term)
+    );
+    if (onlyAtRisk) rows = rows.filter(m => m._isAtRisk);
+    // Urutkan yang perlu perhatian ke atas dulu supaya gampang ke-notice
+    // oleh Mentor/DPL tanpa perlu scroll, baru alfabetis di dalam grup.
+    rows.sort((a, b) => {
+      if (a._isAtRisk !== b._isAtRisk) return a._isAtRisk ? -1 : 1;
+      return (a.nama || '').localeCompare(b.nama || '', 'id');
+    });
+    return rows;
+  }, [mhsListEnriched, mhsSearchTerm, onlyAtRisk]);
+
+  // Export Excel daftar Mahasiswa Bimbingan (mengikuti hasil search/filter
+  // yang sedang aktif) -- 1 sheet, kolom-kolom yang tersedia dari data
+  // yang sudah dipunyai reviewer (tanpa perlu fetch tambahan per mahasiswa).
+  const handleExportExcel = () => {
+    setIsExporting(true);
+    try {
+      const rows = filteredMhsList.map(m => ({
+        NIM: m.nim,
+        Nama: m.nama,
+        Prodi: m.prodi || '-',
+        Mitra: m.mitra || '-',
+        WhatsApp: m.wa || '-',
+        'Jam Tercapai': m.currentHours ?? '-',
+        'Target Jam': m.targetHours ?? '-',
+        'Progres Jam (%)': m.progressPercentage ?? '-',
+        'Progres Waktu (%)': m.timePercentage ?? '-',
+        'Perlu Perhatian': m._isAtRisk ? 'Ya' : 'Tidak',
+        'Logbook Pending': m._pendingLogCount,
+        'Laporan Pending': m._pendingLaporanCount,
+      }));
+
+      if (rows.length === 0) {
+        showToast('Tidak ada data untuk diexport.', 'error');
+        return;
+      }
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+      ws['!cols'] = Object.keys(rows[0]).map(() => ({ wch: 18 }));
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Mahasiswa Bimbingan');
+
+      const today = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(wb, `Mahasiswa_Bimbingan_${today}.xlsx`);
+      showToast('Export Excel berhasil.', 'success');
+    } catch (err) {
+      showToast('Gagal export Excel.', 'error');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   if (!hasToken) {
     return (
@@ -517,9 +657,14 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
           </button>
           <button
             onClick={() => setActiveTab('mahasiswa')}
-            className={`flex-1 py-3 text-xs font-bold rounded-xl transition-all ${activeTab === 'mahasiswa' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+            className={`flex-1 py-3 text-xs font-bold rounded-xl transition-all relative flex items-center justify-center gap-1.5 ${activeTab === 'mahasiswa' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
           >
             Mahasiswa
+            {atRiskCount > 0 && (
+              <span className={`text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center ${activeTab === 'mahasiswa' ? 'bg-rose-500 text-white' : 'bg-rose-100 text-rose-600'}`}>
+                {atRiskCount}
+              </span>
+            )}
           </button>
         </div>
       </div>
@@ -671,32 +816,129 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
         )}
 
         {activeTab === 'mahasiswa' && (
-          <div className="space-y-3">
-            {mhsList.map(mhs => {
-              const pendingCount = pendingLogs.filter(l => l.nim === mhs.nim).length;
-              const pendingLapCount = pendingLaporan.filter(l => l.nim === mhs.nim).length;
-              const totalPending = pendingCount + pendingLapCount;
+          <div className="space-y-4">
+            {/* SEARCH + FILTER + EXPORT */}
+            <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-100 space-y-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Cari nama, NIM, prodi, atau mitra..."
+                  value={mhsSearchTerm}
+                  onChange={(e) => setMhsSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+                {mhsSearchTerm && (
+                  <button onClick={() => setMhsSearchTerm('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
 
-              return (
-                <div
-                  key={mhs.id}
-                  onClick={() => setSelectedMhsId(mhs.id)}
-                  className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 cursor-pointer hover:border-indigo-200 transition-all group"
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setOnlyAtRisk(prev => !prev)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-colors border
+                    ${onlyAtRisk ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-rose-600 border-rose-200 hover:bg-rose-50'}`}
                 >
-                  <div className="w-12 h-12 bg-slate-100 group-hover:bg-indigo-100 rounded-full flex items-center justify-center font-bold text-slate-500 group-hover:text-indigo-600 transition-colors">
-                    {mhs.nama.charAt(0)}
+                  <AlertCircle className="w-3.5 h-3.5" /> Perlu Perhatian {atRiskCount > 0 ? `(${atRiskCount})` : ''}
+                </button>
+                <button
+                  onClick={handleExportExcel}
+                  disabled={isExporting}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors disabled:opacity-60"
+                >
+                  {isExporting ? <ButtonSpinner className="w-3.5 h-3.5" /> : <Download className="w-3.5 h-3.5" />} Export Excel
+                </button>
+              </div>
+            </div>
+
+            {/* LIST MAHASISWA */}
+            <div className="space-y-3">
+              {filteredMhsList.map(mhs => {
+                const totalPending = mhs._pendingLogCount + mhs._pendingLaporanCount;
+                const adaProgres = typeof mhs.progressPercentage === 'number';
+                const waHref = waLink(mhs.wa, buildReminderMessage(mhs, reviewerInfo));
+
+                return (
+                  <div
+                    key={mhs.id}
+                    className={`bg-white p-4 rounded-2xl shadow-sm border transition-all group ${mhs._isAtRisk ? 'border-rose-200 shadow-rose-100/50' : 'border-slate-100 hover:border-indigo-200'}`}
+                  >
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelectedMhsId(mhs.id)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedMhsId(mhs.id); } }}
+                      className="flex items-center gap-4 cursor-pointer"
+                    >
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold shrink-0 transition-colors ${mhs._isAtRisk ? 'bg-rose-50 text-rose-600' : 'bg-slate-100 group-hover:bg-indigo-100 text-slate-500 group-hover:text-indigo-600'}`}>
+                        {mhs.nama.charAt(0)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-bold text-slate-800 truncate">{mhs.nama}</h3>
+                          {mhs._isAtRisk && (
+                            <span className="shrink-0 flex items-center gap-1 bg-rose-100 text-rose-700 text-[9px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wide">
+                              <AlertCircle className="w-2.5 h-2.5" /> Perhatian
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider truncate">{mhs.nim} • {mhs.prodi}</p>
+                        {mhs.mitra && (
+                          <p className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5 truncate">
+                            <MapPin className="w-3 h-3 shrink-0" /> {mhs.mitra}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-indigo-500 transition-colors" />
+                        {totalPending > 0 && <span className="bg-amber-100 text-amber-700 text-[9px] font-bold px-2 py-0.5 rounded-md">{totalPending} Antrean</span>}
+                      </div>
+                    </div>
+
+                    {adaProgres && (
+                      <div className="mt-3">
+                        <div className="flex justify-between items-baseline mb-1">
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Progres Jam Logbook</span>
+                          <span className={`text-[10px] font-black ${mhs._isAtRisk ? 'text-rose-600' : 'text-indigo-600'}`}>{mhs.progressPercentage}%</span>
+                        </div>
+                        <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${mhs._isAtRisk ? 'bg-rose-500' : mhs.progressPercentage >= 100 ? 'bg-emerald-500' : 'bg-indigo-500'}`}
+                            style={{ width: `${Math.min(100, mhs.progressPercentage)}%` }}
+                          />
+                        </div>
+                        {(typeof mhs.currentHours === 'number' && typeof mhs.targetHours === 'number') && (
+                          <p className="text-[9px] font-bold text-slate-400 mt-1">{mhs.currentHours}/{mhs.targetHours} Jam</p>
+                        )}
+                      </div>
+                    )}
+
+                    {waHref && (
+                      <a
+                        href={waHref}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className={`mt-3 flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-xs font-bold transition-colors
+                          ${mhs._isAtRisk ? 'bg-rose-600 text-white hover:bg-rose-700' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}
+                      >
+                        <FaWhatsapp className="w-3.5 h-3.5" />
+                        {mhs._isAtRisk ? 'Ingatkan Isi Logbook' : 'Kirim Pesan WA'}
+                      </a>
+                    )}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-slate-800 truncate">{mhs.nama}</h3>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider truncate">{mhs.nim} • {mhs.prodi}</p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-indigo-500 transition-colors" />
-                    {totalPending > 0 && <span className="bg-amber-100 text-amber-700 text-[9px] font-bold px-2 py-0.5 rounded-md">{totalPending} Antrean</span>}
-                  </div>
+                );
+              })}
+
+              {filteredMhsList.length === 0 && (
+                <div className="text-center p-8 bg-white rounded-2xl border-2 border-dashed border-slate-200">
+                  <FileWarning className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                  <p className="text-sm font-medium text-slate-400">Tidak ada mahasiswa yang cocok dengan pencarian/filter.</p>
                 </div>
-              );
-            })}
+              )}
+            </div>
           </div>
         )}
       </div>
