@@ -4,7 +4,7 @@ import {
   CheckCircle, AlertCircle, Plus, ChevronLeft, LogOut, 
   Search, Calendar, Send, Info, Bell, X, ChevronRight,
   TrendingUp, Activity, Pencil, Trash2, Download, Printer, ArrowUpDown, Filter, Loader2,
-  Sun, Moon, Home, PhoneCallIcon
+  Sun, Moon, Home, PhoneCallIcon, Eye, EyeOff
 } from 'lucide-react';
 import { FaWhatsapp } from 'react-icons/fa';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
@@ -278,23 +278,46 @@ const ThemeToggle = ({ mode, onToggle, className = '' }) => (
   </button>
 );
 
-const Input = ({ label, type = "text", error, disabled, icon: Icon, ...props }) => (
-  <div className="mb-4 relative">
-    <label className="block text-xs font-bold tracking-wide text-slate-500 dark:text-slate-400 uppercase mb-1.5 ml-1">{label}</label>
-    <div className="relative">
-      {Icon && <Icon className="absolute left-4 top-3.5 w-5 h-5 text-slate-400 dark:text-slate-500" />}
-      <input 
-        type={type} 
-        disabled={disabled}
-        className={`w-full p-3.5 ${Icon ? 'pl-11' : 'pl-4'} bg-slate-50 dark:bg-slate-900 border rounded-2xl text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-800 transition-all duration-200 outline-none
-        ${error ? 'border-rose-400 focus:ring-rose-500 bg-rose-50' : 'border-slate-200 dark:border-slate-600'} 
-        ${disabled ? 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-80 shadow-inner' : 'shadow-sm hover:border-slate-300'}`}
-        {...props} 
-      />
+// showPasswordToggle: kalau true DAN type="password", tampilkan tombol
+// mata di kanan input untuk toggle lihat/sembunyikan sandi. State lokal
+// per-Input (bukan diangkat ke parent) supaya tiap field password
+// (mis. Kata Sandi & Konfirmasi Kata Sandi) punya toggle sendiri-sendiri
+// dan tidak saling memengaruhi.
+const Input = ({ label, type = "text", error, disabled, icon: Icon, showPasswordToggle, ...props }) => {
+  const [isRevealed, setIsRevealed] = useState(false);
+  const isPasswordField = type === "password";
+  const effectiveType = isPasswordField && showPasswordToggle && isRevealed ? "text" : type;
+
+  return (
+    <div className="mb-4 relative">
+      <label className="block text-xs font-bold tracking-wide text-slate-500 dark:text-slate-400 uppercase mb-1.5 ml-1">{label}</label>
+      <div className="relative">
+        {Icon && <Icon className="absolute left-4 top-3.5 w-5 h-5 text-slate-400 dark:text-slate-500" />}
+        <input 
+          type={effectiveType} 
+          disabled={disabled}
+          className={`w-full p-3.5 ${Icon ? 'pl-11' : 'pl-4'} ${isPasswordField && showPasswordToggle ? 'pr-11' : 'pr-4'} bg-slate-50 dark:bg-slate-900 border rounded-2xl text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-800 transition-all duration-200 outline-none
+          ${error ? 'border-rose-400 focus:ring-rose-500 bg-rose-50' : 'border-slate-200 dark:border-slate-600'} 
+          ${disabled ? 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-80 shadow-inner' : 'shadow-sm hover:border-slate-300'}`}
+          {...props} 
+        />
+        {isPasswordField && showPasswordToggle && (
+          <button
+            type="button"
+            onClick={() => setIsRevealed(v => !v)}
+            disabled={disabled}
+            tabIndex={-1}
+            aria-label={isRevealed ? 'Sembunyikan kata sandi' : 'Lihat kata sandi'}
+            className="absolute right-3.5 top-3.5 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {isRevealed ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+          </button>
+        )}
+      </div>
+      {error && <p className="text-rose-500 text-xs mt-1.5 ml-1 font-medium flex items-center gap-1"><AlertCircle className="w-3 h-3"/> {error}</p>}
     </div>
-    {error && <p className="text-rose-500 text-xs mt-1.5 ml-1 font-medium flex items-center gap-1"><AlertCircle className="w-3 h-3"/> {error}</p>}
-  </div>
-);
+  );
+};
 
 const SearchableSelect = ({ label, options, value, onChange, placeholder, onAddCustom, clearOnSelect }) => {
   // 1. Berikan fallback string kosong saat inisialisasi awal
@@ -591,6 +614,7 @@ const LoginView = ({ onLogin, themeMode, onToggleTheme }) => {
                   error={error}
                   icon={Lock}
                   disabled={isSubmitting}
+                  showPasswordToggle
                 />
                 <div className="text-right -mt-2">
                   <button
@@ -717,6 +741,7 @@ const LoginView = ({ onLogin, themeMode, onToggleTheme }) => {
                   error={regError.includes('Kata sandi') && !regError.includes('cocok') ? " " : ""}
                   icon={Lock}
                   disabled={isRegistering}
+                  showPasswordToggle
                 />
                 <Input 
                   label="Konfirmasi Kata Sandi" 
@@ -727,6 +752,7 @@ const LoginView = ({ onLogin, themeMode, onToggleTheme }) => {
                   error={regError.includes('cocok') ? regError : ""}
                   icon={Lock}
                   disabled={isRegistering}
+                  showPasswordToggle
                 />
                 {regError && !regError.includes('cocok') && (
                   <p className="text-rose-500 text-xs -mt-2 font-medium flex items-center gap-1"><AlertCircle className="w-3 h-3"/> {regError}</p>
@@ -3165,6 +3191,15 @@ export default function App() {
   // reviewer, sudah redirect ke reviewer.html) supaya tidak tertukar.
   const [resetToken, setResetToken] = useState('');
   const [user, setUser] = useState(null);  // { nim, nama }
+  // Penanda NIM yang SEDANG aktif -- dipakai untuk membuang response
+  // async yang "basi" (mis. request milik mahasiswa A yang baru selesai
+  // SETELAH mahasiswa B login di device/tab yang sama). Tanpa ini,
+  // setProfile/setLogbooks dari request lama bisa menimpa data mahasiswa
+  // yang sedang login sekarang -> gejala "login malah tampil akun orang
+  // lain" di komputer/HP yang dipakai bergantian. Ref (bukan state)
+  // supaya nilainya langsung ter-update sinkron begitu login/logout,
+  // tidak menunggu re-render.
+  const activeNimRef = useRef(null);
   const [profile, setProfile] = useState(null);
   const [logbooks, setLogbooks] = useState([]);
   const [editingLogbook, setEditingLogbook] = useState(null);
@@ -3264,10 +3299,12 @@ export default function App() {
     // langsung muat data dashboard tanpa minta login ulang.
     const cached = session.getValid();
     if (cached) {
+      activeNimRef.current = cached.nim;
       setUser({ nim: cached.nim, nama: cached.nama });
       setLocalDraftsList(localDrafts.list(cached.nim));
       loadUserData(cached.nim);
     } else {
+      activeNimRef.current = null;
       session.clear();
       setView('login');
     }
@@ -3289,6 +3326,13 @@ export default function App() {
   // memang belum ada apa pun yang bisa ditampilkan.
   // ---------------------------------------------------------------------
   const loadUserData = async (nim) => {
+    // Semua setState di bawah HARUS lewat guard ini dulu. Kalau user
+    // sudah logout/login-jadi-orang-lain SEBELUM response nim ini
+    // datang, response dianggap basi dan dibuang -- mencegah data
+    // mahasiswa lain "menimpa" akun yang sedang aktif (lihat catatan
+    // di activeNimRef).
+    const isStale = () => activeNimRef.current !== nim;
+
     let gotProfileCacheHit = false;
 
     // Fungsi helper untuk mengecek apakah profil sudah lengkap (Detail Penugasan)
@@ -3301,7 +3345,7 @@ export default function App() {
     // ---------------------------------------------------------------
     const profilePromise = api.getProfile(nim, {
       onCacheHit: (cached) => {
-        if (!cached) return;
+        if (!cached || isStale()) return;
         gotProfileCacheHit = true;
         // Cache-hit render instan pakai data GAS apa adanya dulu (belum
         // digabung Supabase) supaya tetap terasa instan -- begitu fetch
@@ -3325,44 +3369,48 @@ export default function App() {
     setIsLogbooksLoading(true);
     const logbookPromise = api.getLogbooks(nim, {
       onCacheHit: (cached) => {
+        if (isStale()) return;
         gotLogbookCacheHit = true;
         setLogbooks(cached || []);
       },
     });
     logbookPromise
-      .then((data) => setLogbooks(data || []))
+      .then((data) => { if (!isStale()) setLogbooks(data || []); })
       .catch(() => {
-        if (gotLogbookCacheHit) {
+        if (gotLogbookCacheHit && !isStale()) {
           showToast('Gagal memperbarui logbook terbaru. Menampilkan data tersimpan.', 'error');
         }
       })
-      .finally(() => setIsLogbooksLoading(false));
+      .finally(() => { if (!isStale()) setIsLogbooksLoading(false); });
 
     let gotLaporanCacheHit = false;
     setIsLaporanLoading(true);
     const laporanPromise = api.getLaporan(nim, {
       onCacheHit: (cached) => {
+        if (isStale()) return;
         gotLaporanCacheHit = true;
         setLaporanAkhir(cached || null);
       },
     });
     laporanPromise
-      .then((data) => setLaporanAkhir(data || null))
+      .then((data) => { if (!isStale()) setLaporanAkhir(data || null); })
       .catch(() => {
-        if (gotLaporanCacheHit) {
+        if (gotLaporanCacheHit && !isStale()) {
           showToast('Gagal memperbarui laporan terbaru. Menampilkan data tersimpan.', 'error');
         }
       })
-      .finally(() => setIsLaporanLoading(false));
+      .finally(() => { if (!isStale()) setIsLaporanLoading(false); });
 
     await Promise.resolve();
-    if (!gotProfileCacheHit) {
+    if (!gotProfileCacheHit && !isStale()) {
       setIsLoadingDashboardData(true);
       setView('loadingDashboard');
     }
 
     try {
       const profileDataRaw = await profilePromise;
+
+      if (isStale()) return; // user sudah ganti akun -- buang hasil ini
 
       // Gabungkan Bagian 1-3 dari Supabase DI ATAS data GAS -- ini yang
       // tadinya hilang: mahasiswa yang mengisi Bagian 1-3 lewat tombol
@@ -3373,6 +3421,9 @@ export default function App() {
       // (dan validasi kelengkapan profil di bawah) salah mengira profil
       // belum diisi sama sekali.
       const profileData = await mergeSupabaseBagian123(profileDataRaw || { nim }, nim);
+
+      if (isStale()) return; // user sudah ganti akun lagi selama merge berjalan
+
       const hasAnyProfileData = profileData && (profileData.nama || profileData.email || profileData.prodi);
 
       if (!hasAnyProfileData) {
@@ -3394,6 +3445,7 @@ export default function App() {
         setView('setup');
       }
     } catch (err) {
+      if (isStale()) return;
       if (gotProfileCacheHit) {
         showToast('Gagal memperbarui profil terbaru. Menampilkan data tersimpan.', 'error');
       } else {
@@ -3403,11 +3455,12 @@ export default function App() {
         setView('login');
       }
     } finally {
-      setIsLoadingDashboardData(false);
+      if (!isStale()) setIsLoadingDashboardData(false);
     }
   };
 
   const handleLogin = (nim, nama, password) => {
+    activeNimRef.current = nim;
     session.save(nim, nama);
     // Disimpan HANYA di sessionStorage (hilang saat tab ditutup) --
     // dipakai ProfileSetupView untuk memanggil RPC Supabase Bagian 1-3
@@ -3420,6 +3473,7 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    activeNimRef.current = null;
     session.clear();
     setUser(null);
     setProfile(null);
