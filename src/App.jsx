@@ -923,7 +923,7 @@ const ResetPasswordView = ({ token, onDone }) => {
 };
 
 // 3. Profile Setup View
-const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggestions, dosenList, onSave, onBagianSaved, onBack, showToast }) => {
+const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggestions, dosenList, onSave, onBagianSaved, onSessionExpired, onBack, showToast }) => {
   const [step, setStep] = useState(1);
   const [isSaving, setIsSaving] = useState(false); // khusus tombol "Simpan Berkas" (Bagian 4, lewat Apps Script)
   // isSavingStep: loading terpisah per bagian (1/2/3) -- masing-masing
@@ -1145,7 +1145,15 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
     }
     const password = session.getPassword();
     if (!password) {
-      showToast('Sesi sudah tidak aktif, silakan login ulang lalu coba lagi.', 'error');
+      // Sesi login (password di sessionStorage) sudah hilang -- biasanya
+      // karena tab/browser sempat ditutup lalu dibuka lagi (sessionStorage
+      // ikut hilang, sementara sesi login 7 hari di localStorage masih
+      // berlaku sehingga mahasiswa tetap otomatis masuk ke Dashboard).
+      // JANGAN cuma tampilkan toast -- paksa logout & arahkan ke halaman
+      // login supaya mahasiswa login ulang dan dapat password baru di
+      // sessionStorage, bukan macet di sini tanpa jalan keluar yang jelas.
+      showToast('Sesi Anda sudah tidak aktif. Silakan login ulang.', 'error');
+      onSessionExpired?.();
       return;
     }
     setIsSavingStep(prev => ({ ...prev, 1: true }));
@@ -1171,7 +1179,8 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
   const handleSaveStep2 = async () => {
     const password = session.getPassword();
     if (!password) {
-      showToast('Sesi sudah tidak aktif, silakan login ulang lalu coba lagi.', 'error');
+      showToast('Sesi Anda sudah tidak aktif. Silakan login ulang.', 'error');
+      onSessionExpired?.();
       return;
     }
     setIsSavingStep(prev => ({ ...prev, 2: true }));
@@ -1193,7 +1202,8 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
     }
     const password = session.getPassword();
     if (!password) {
-      showToast('Sesi sudah tidak aktif, silakan login ulang lalu coba lagi.', 'error');
+      showToast('Sesi Anda sudah tidak aktif. Silakan login ulang.', 'error');
+      onSessionExpired?.();
       return;
     }
     setIsSavingStep(prev => ({ ...prev, 3: true }));
@@ -3644,6 +3654,7 @@ export default function App() {
             dosenList={dosenList}
             onSave={handleSaveProfile} 
             onBagianSaved={handleBagianSaved}
+            onSessionExpired={handleLogout}
             // Tombol "Kembali" hanya muncul kalau profil SUDAH benar-benar lengkap
             onBack={(profile && profile.nama && profile.email && profile.prodi && profile.fakultas && profile.lokasi) ? () => setView('dashboard') : null} 
             showToast={showToast} 
