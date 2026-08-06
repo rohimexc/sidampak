@@ -45,8 +45,8 @@ const PRODI_LIST_FALLBACK = [
 ];
 const PROGRAM_LIST_FALLBACK = [
   'Kampus Mengajar Berdampak', 'Magang Berdampak', 'Studi Independen Berdampak', 
-  'Pertukaran Mahasiswa Berdampak', 'Bina Desa Berdampak', 'Kewirausahaan Berdampak', 
-  'Proyek Kemanusiaan Berdampak'
+  'Pertukaran Mahasiswa Berdampak', 'Bina Desa Berdampak', 'Kewirausahaan Berdampak',
+  'Penelitian Berdampak', 'Proyek Kemanusiaan Berdampak'
 ];
 const KEGIATAN_DEFAULT = [
   'Pembekalan', 'Rapat Koordinasi', 'Observasi Lapangan', 'Pengembangan Sistem', 

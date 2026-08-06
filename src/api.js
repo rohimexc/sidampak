@@ -300,7 +300,7 @@ export const api = {
         prodi: (prodiRes.data || []).map((r) => ({ nama: r.NamaProdi, fakultas: r.NamaFakultas })),
         jenisProgram: [
           'Kampus Mengajar Berdampak', 'Magang Berdampak', 'Studi Independen Berdampak',
-          'Pertukaran Mahasiswa Berdampak', 'Bina Desa Berdampak', 'Kewirausahaan Berdampak',
+          'Pertukaran Mahasiswa Berdampak', 'Bina Desa Berdampak', 'Kewirausahaan Berdampak', 'Penelitian Berdampak',
           'Proyek Kemanusiaan Berdampak',
         ],
         tahunAjaranAktif: (taRes.data && taRes.data.length > 0) ? taRes.data[0] : null,
