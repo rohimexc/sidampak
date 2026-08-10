@@ -684,7 +684,7 @@ const LoginView = ({ onLogin, themeMode, onToggleTheme }) => {
                     disabled={isSendingReset}
                     className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 dark:from-indigo-800 dark:to-blue-800 text-white font-bold p-4 rounded-2xl mt-4 hover:shadow-lg hover:shadow-indigo-500/30 dark:hover:shadow-indigo-500/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-70"
                   >
-                    {isSendingReset ? <><ButtonSpinner /> Mengirim...</> : 'Kirim Link Reset ke WhatsApp'}
+                    {isSendingReset ? <><ButtonSpinner /> Mengirim...</> : 'Kirim Link Reset ke WhatsApp/Email'}
                   </button>
                   <button
                     type="button"
