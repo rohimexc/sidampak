@@ -994,17 +994,40 @@ const MahasiswaTab = ({ token, showToast }) => {
   const [tahunAjaranList, setTahunAjaranList] = useState([]);
   const [selectedTahun, setSelectedTahun] = useState('');
   const [fakultasOptions, setFakultasOptions] = useState([]);
-  const [prodiOptions, setProdiOptions] = useState([]);
+  const [prodiOptions, setProdiOptions] = useState([]); // [{ nama, fakultas }] -- SEKARANG dari tabel master Prodi (lihat SuperAdmin.gs), bukan diturunkan dari mahasiswa yang termuat
   const [selectedFakultas, setSelectedFakultas] = useState('semua');
   const [selectedProdi, setSelectedProdi] = useState('semua');
   const [searchTerm, setSearchTerm] = useState('');
+  // Pencarian di-debounce 400ms sebelum ditembak ke server -- supaya
+  // tidak mengirim request per keystroke. Pencarian ini SEKARANG
+  // dieksekusi DI SERVER (nama/NIM, lihat orIlikeFilter_ di
+  // Supabase.gs), jadi tetap menjangkau SELURUH universitas walau
+  // datanya dipaginasi per halaman -- beda dari statusFilter/
+  // onlyAtRisk/onlyMitraKosong di bawah yang TETAP client-side (lihat
+  // catatan di dekat filteredPageData).
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('semua');
   const [onlyAtRisk, setOnlyAtRisk] = useState(false);
   const [onlyMitraKosong, setOnlyMitraKosong] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [entriesPerPage] = useState(12);
+
+  // --- Paginasi SERVER-SIDE -- lihat handleGetSuperAdminData_
+  // (SuperAdmin.gs). Server hanya menarik & mengagregasi progres utk
+  // maks `pageSize` mahasiswa sekaligus, TIDAK PERNAH seluruh
+  // universitas dalam satu request (itu yang dulu berpotensi memicu
+  // request Supabase yang sangat berat/lambat untuk fakultas besar).
+  const [page, setPage] = useState(1);
+  const pageSize = 50; // = ADMIN_LIST_MAX_PAGE_SIZE_ di server, batas atas yang aman
+  const [totalMahasiswa, setTotalMahasiswa] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
   const [selectedNim, setSelectedNim] = useState(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState('');
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 400);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -1014,15 +1037,21 @@ const MahasiswaTab = ({ token, showToast }) => {
       setTahunAjaranList(data.tahunAjaranList || []);
       setFakultasOptions(data.fakultasOptions || []);
       setProdiOptions(data.prodiOptions || []);
+      setTotalMahasiswa(data.totalMahasiswa ?? 0);
+      setTotalPages(data.totalPages ?? 1);
       if (!selectedTahun && data.tahunAjaranAktifId) setSelectedTahun(data.tahunAjaranAktifId);
     };
     try {
       const data = await api.getSuperAdminData(token, {
         tahunAjaranId: selectedTahun,
         fakultas: selectedFakultas === 'semua' ? '' : selectedFakultas,
+        prodi: selectedProdi === 'semua' ? '' : selectedProdi,
+        search: debouncedSearch,
+        page, // WAJIB diisi -- menandakan ke server ini mode paginasi (lihat catatan di api.js)
+        pageSize,
       }, {
-        // Filter yang sama pernah dibuka -> tampil instan dari cache,
-        // sambil fetch fresh tetap jalan di belakang.
+        // Filter/halaman yang sama pernah dibuka -> tampil instan dari
+        // cache, sambil fetch fresh tetap jalan di belakang.
         onCacheHit: (cached) => { applyData(cached); setIsLoading(false); },
       });
       applyData(data);
@@ -1031,39 +1060,90 @@ const MahasiswaTab = ({ token, showToast }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [token, selectedTahun, selectedFakultas]);
+  }, [token, selectedTahun, selectedFakultas, selectedProdi, debouncedSearch, page]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Ganti filter apa pun (kecuali pindah halaman itu sendiri) -> selalu
+  // kembali ke halaman 1, supaya tidak "terdampar" di halaman yang
+  // ternyata sudah tidak ada untuk kombinasi filter yang baru.
+  useEffect(() => { setPage(1); }, [selectedTahun, selectedFakultas, selectedProdi, debouncedSearch]);
 
   // Reset prodi terpilih kalau fakultas berubah (prodi lama mungkin sudah tidak relevan)
   useEffect(() => { setSelectedProdi('semua'); }, [selectedFakultas]);
 
   const prodiOptionsForFakultas = useMemo(() => {
-    if (selectedFakultas === 'semua') return prodiOptions;
-    return [...new Set(mahasiswaList.filter(m => m.fakultas === selectedFakultas).map(m => m.prodi))].sort((a, b) => a.localeCompare(b, 'id'));
-  }, [prodiOptions, mahasiswaList, selectedFakultas]);
+    if (selectedFakultas === 'semua') return prodiOptions.map(p => p.nama);
+    return prodiOptions.filter(p => p.fakultas === selectedFakultas).map(p => p.nama);
+  }, [prodiOptions, selectedFakultas]);
 
-  const filteredData = useMemo(() => {
-    const term = (searchTerm || '').toLowerCase();
-    let rows = mahasiswaList.filter(m =>
-      (m.nama || '').toLowerCase().includes(term) || (m.nim || '').toLowerCase().includes(term) || (m.mitra || '').toLowerCase().includes(term)
-    );
-    if (selectedProdi !== 'semua') rows = rows.filter(m => m.prodi === selectedProdi);
+  // PENTING -- BEDA dari searchTerm (server-side, lihat catatan di
+  // atas): statusFilter/onlyAtRisk/onlyMitraKosong TIDAK BISA dipindah
+  // ke server, karena isAtRisk/statusLaporan/dst adalah field HASIL
+  // AGREGASI (dihitung dari Logbook/Laporan/dst), bukan kolom mentah
+  // di tabel Mahasiswa yang bisa difilter PostgREST secara langsung.
+  // Ketiganya jadi HANYA menyaring di antara `pageSize` mahasiswa yang
+  // SUDAH TERMUAT di halaman saat ini -- badge jumlah di tombolnya
+  // sengaja TIDAK ditampilkan (beda dari versi sebelum paginasi) untuk
+  // menghindari kesan "ini total se-universitas", padahal bukan.
+  const filteredPageData = useMemo(() => {
+    let rows = mahasiswaList;
+    if (statusFilter !== 'semua') rows = rows.filter(m => m.statusLaporan === statusFilter);
+    if (onlyAtRisk) rows = rows.filter(m => m.isAtRisk);
+    if (onlyMitraKosong) rows = rows.filter(m => !m.mitra);
+    return rows;
+  }, [mahasiswaList, statusFilter, onlyAtRisk, onlyMitraKosong]);
+
+  const hasPageOnlyFilterActive = statusFilter !== 'semua' || onlyAtRisk || onlyMitraKosong;
+
+  /**
+   * Export Excel HARUS tetap mencakup SEMUA mahasiswa yang cocok
+   * filter server (tahun/fakultas/prodi/pencarian) -- BUKAN cuma
+   * halaman yang sedang tampil di layar. Karena sekarang datanya
+   * dipaginasi, fungsi ini me-loop memanggil server halaman demi
+   * halaman (masing-masing tetap kecil & aman, lihat catatan paginasi
+   * di atas) sampai semua halaman terkumpul, BARU menerapkan
+   * statusFilter/onlyAtRisk/onlyMitraKosong (yang memang cuma bisa
+   * dihitung client-side) ke SELURUH data yang terkumpul itu -- supaya
+   * hasil export tetap benar mencerminkan filter yang aktif, bukan
+   * cuma apa yang kebetulan terlihat di halaman saat ini.
+   */
+  const fetchAllMatchingForExport = async () => {
+    const collected = [];
+    let p = 1;
+    let total = 1;
+    do {
+      setExportProgress(`Mengambil data mahasiswa (halaman ${p}${total > 1 ? ` dari ${total}` : ''})...`);
+      const result = await api.getSuperAdminData(token, {
+        tahunAjaranId: selectedTahun,
+        fakultas: selectedFakultas === 'semua' ? '' : selectedFakultas,
+        prodi: selectedProdi === 'semua' ? '' : selectedProdi,
+        search: debouncedSearch,
+        page: p,
+        pageSize: 50,
+      });
+      collected.push(...(result.mahasiswa || []));
+      total = result.totalPages || 1;
+      p++;
+    } while (p <= total);
+
+    let rows = collected;
     if (statusFilter !== 'semua') rows = rows.filter(m => m.statusLaporan === statusFilter);
     if (onlyAtRisk) rows = rows.filter(m => m.isAtRisk);
     if (onlyMitraKosong) rows = rows.filter(m => !m.mitra);
     rows.sort((a, b) => (a.nama || '').localeCompare(b.nama || '', 'id'));
     return rows;
-  }, [mahasiswaList, searchTerm, selectedProdi, statusFilter, onlyAtRisk, onlyMitraKosong]);
+  };
 
-  const totalPages = Math.ceil(filteredData.length / entriesPerPage) || 1;
-  const currentEntries = filteredData.slice((currentPage - 1) * entriesPerPage, currentPage * entriesPerPage);
-
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     setIsExporting(true);
+    setExportProgress('Menyiapkan export...');
     try {
+      const exportData = await fetchAllMatchingForExport();
+      setExportProgress('Menyusun berkas Excel...');
+
       const tahunLabel = tahunAjaranList.find(t => t.id === selectedTahun)?.label || 'Semua';
-      const sheetMahasiswa = filteredData.map(m => ({
+      const sheetMahasiswa = exportData.map(m => ({
         NIM: m.nim, Nama: m.nama, WhatsApp: m.wa, Email: m.email, Prodi: m.prodi, Fakultas: m.fakultas,
         'Jenis Program': m.jenisProgram, 'Nama Program': m.namaProgram, Mitra: m.mitra, Lokasi: m.lokasi,
         'Tgl Mulai': formatDateIndoShort(m.tglAwal), 'Tgl Selesai': formatDateIndoShort(m.tglAkhir),
@@ -1081,13 +1161,13 @@ const MahasiswaTab = ({ token, showToast }) => {
       wsMahasiswa['!cols'] = Object.keys(sheetMahasiswa[0] || {}).map(() => ({ wch: 20 }));
 
       const sheetMk = [];
-      filteredData.forEach(m => (m.mataKuliah || []).forEach(mk => {
+      exportData.forEach(m => (m.mataKuliah || []).forEach(mk => {
         sheetMk.push({ NIM: m.nim, Nama: m.nama, Fakultas: m.fakultas, Prodi: m.prodi, 'Kode MK': mk.kode, 'Nama Matakuliah': mk.nama, SKS: mk.sks, 'Target Jam': mk.targetHours, 'Jam Tercapai': mk.currentHours, 'Progres (%)': mk.percentage });
       }));
       const wsMk = XLSX.utils.json_to_sheet(sheetMk);
 
       const rekapByFakultas = {};
-      filteredData.forEach(m => {
+      exportData.forEach(m => {
         const key = m.fakultas || 'Tanpa Fakultas';
         if (!rekapByFakultas[key]) rekapByFakultas[key] = { fakultas: key, jumlah: 0, laporanDisetujui: 0, perluPerhatian: 0, totalProgress: 0 };
         rekapByFakultas[key].jumlah += 1;
@@ -1106,8 +1186,12 @@ const MahasiswaTab = ({ token, showToast }) => {
       XLSX.utils.book_append_sheet(wb, wsMk, 'Detail Mata Kuliah');
       XLSX.utils.book_append_sheet(wb, wsRekap, 'Rekap Fakultas');
       XLSX.writeFile(wb, `SIDAMPAK_Universitas_${tahunLabel}_${Date.now()}.xlsx`.replace(/\s+/g, '_'));
+      showToast(`Export selesai (${exportData.length} mahasiswa).`);
+    } catch (err) {
+      showToast(err.message || 'Gagal mengekspor data.', 'error');
     } finally {
       setIsExporting(false);
+      setExportProgress('');
     }
   };
 
@@ -1125,13 +1209,13 @@ const MahasiswaTab = ({ token, showToast }) => {
       <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 dark:text-slate-500" />
-          <input type="text" placeholder="Cari nama, NIM, atau mitra..." value={searchTerm}
-            onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+          <input type="text" placeholder="Cari nama atau NIM (seluruh universitas)..." value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
             className="w-full pl-9 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
         </div>
         <div className="flex flex-wrap gap-2">
           <div className="relative">
-            <select value={selectedTahun} onChange={e => { setSelectedTahun(e.target.value); setCurrentPage(1); }}
+            <select value={selectedTahun} onChange={e => setSelectedTahun(e.target.value)}
               className="appearance-none pl-3 pr-8 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold outline-none cursor-pointer">
               <option value="">Semua Tahun Ajaran</option>
               {tahunAjaranList.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
@@ -1139,7 +1223,7 @@ const MahasiswaTab = ({ token, showToast }) => {
             <ChevronDown className="w-3.5 h-3.5 text-white absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
           <div className="relative">
-            <select value={selectedFakultas} onChange={e => { setSelectedFakultas(e.target.value); setCurrentPage(1); }}
+            <select value={selectedFakultas} onChange={e => setSelectedFakultas(e.target.value)}
               className="appearance-none pl-3 pr-8 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-xs font-bold outline-none cursor-pointer max-w-[180px]">
               <option value="semua">Semua Fakultas</option>
               {fakultasOptions.map(f => <option key={f} value={f}>{f}</option>)}
@@ -1147,7 +1231,7 @@ const MahasiswaTab = ({ token, showToast }) => {
             <Building2 className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
           <div className="relative">
-            <select value={selectedProdi} onChange={e => { setSelectedProdi(e.target.value); setCurrentPage(1); }}
+            <select value={selectedProdi} onChange={e => setSelectedProdi(e.target.value)}
               className="appearance-none pl-3 pr-8 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-xs font-bold outline-none cursor-pointer max-w-[180px]">
               <option value="semua">Semua Prodi</option>
               {prodiOptionsForFakultas.map(p => <option key={p} value={p}>{p}</option>)}
@@ -1155,7 +1239,7 @@ const MahasiswaTab = ({ token, showToast }) => {
             <GraduationCap className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
           <div className="relative">
-            <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
               className="appearance-none pl-3 pr-8 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-xs font-bold outline-none cursor-pointer">
               <option value="semua">Semua Status Laporan</option>
               <option value="Disetujui">Disetujui</option>
@@ -1165,11 +1249,11 @@ const MahasiswaTab = ({ token, showToast }) => {
             </select>
             <Filter className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
-          <button onClick={() => { setOnlyAtRisk(v => !v); setCurrentPage(1); }}
+          <button onClick={() => setOnlyAtRisk(v => !v)}
             className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 ${onlyAtRisk ? 'bg-rose-600 text-white' : 'bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300'}`}>
             <AlertCircle className="w-3.5 h-3.5" /> Perlu Perhatian {onlyAtRisk && <X className="w-3 h-3" />}
           </button>
-          <button onClick={() => { setOnlyMitraKosong(v => !v); setCurrentPage(1); }}
+          <button onClick={() => setOnlyMitraKosong(v => !v)}
             className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 ${onlyMitraKosong ? 'bg-amber-500 text-white' : 'bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300'}`}>
             <FileWarning className="w-3.5 h-3.5" /> Mitra Belum Diisi {onlyMitraKosong && <X className="w-3 h-3" />}
           </button>
@@ -1177,30 +1261,45 @@ const MahasiswaTab = ({ token, showToast }) => {
             className="p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-xl disabled:opacity-50">
             {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
           </button>
-          <button onClick={handleExportExcel} disabled={isExporting || filteredData.length === 0}
+          <button onClick={handleExportExcel} disabled={isExporting}
+            title="Export mencakup SEMUA halaman yang cocok filter, bukan cuma yang sedang tampil"
             className="ml-auto flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold transition-colors disabled:opacity-60">
-            {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Export ({filteredData.length})
+            {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Export{totalMahasiswa > 0 ? ` (${totalMahasiswa})` : ''}
           </button>
         </div>
+        {isExporting && exportProgress && (
+          <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+            <Loader2 className="w-3 h-3 animate-spin" /> {exportProgress}
+          </p>
+        )}
+        {hasPageOnlyFilterActive && (
+          <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium leading-relaxed">
+            Filter "Status Laporan" / "Perlu Perhatian" / "Mitra Belum Diisi" hanya menyaring di antara {mahasiswaList.length} mahasiswa pada halaman ini -- pindah halaman untuk melihat yang lain sesuai filter tsb. Export tetap mencakup SEMUA halaman.
+          </p>
+        )}
       </div>
 
-      {currentEntries.length === 0 ? (
+      {isLoading ? (
+        <div className="py-16"><Loader2 className="w-8 h-8 text-indigo-600 dark:text-indigo-400 animate-spin mx-auto" /></div>
+      ) : filteredPageData.length === 0 ? (
         <div className="bg-white dark:bg-slate-800 p-10 rounded-[2rem] text-center border border-slate-100 dark:border-slate-700 shadow-sm">
           <Users className="w-10 h-10 text-slate-300 mx-auto mb-3" />
           <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Tidak ada data ditemukan.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          {currentEntries.map(m => <MahasiswaCard key={m.nim} m={m} onOpenDetail={setSelectedNim} />)}
+          {filteredPageData.map(m => <MahasiswaCard key={m.nim} m={m} onOpenDetail={setSelectedNim} />)}
         </div>
       )}
 
       {totalPages > 1 && (
         <div className="flex justify-between items-center bg-white dark:bg-slate-800 p-3 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm">
-          <span className="text-xs font-medium text-slate-500 dark:text-slate-400 pl-2">Hal {currentPage}/{totalPages} • {filteredData.length} data</span>
+          <span className="text-xs font-medium text-slate-500 dark:text-slate-400 pl-2">
+            Mahasiswa {totalMahasiswa === 0 ? 0 : (page - 1) * pageSize + 1}-{Math.min(page * pageSize, totalMahasiswa)} dari {totalMahasiswa} • Hal {page}/{totalPages}
+          </span>
           <div className="flex gap-1">
-            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-2 bg-slate-50 dark:bg-slate-900 rounded-lg disabled:opacity-40"><ChevronLeft className="w-4 h-4" /></button>
-            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-2 bg-slate-50 dark:bg-slate-900 rounded-lg disabled:opacity-40"><ChevronRight className="w-4 h-4" /></button>
+            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={isLoading || page === 1} className="p-2 bg-slate-50 dark:bg-slate-900 rounded-lg disabled:opacity-40"><ChevronLeft className="w-4 h-4" /></button>
+            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={isLoading || page === totalPages} className="p-2 bg-slate-50 dark:bg-slate-900 rounded-lg disabled:opacity-40"><ChevronRight className="w-4 h-4" /></button>
           </div>
         </div>
       )}
@@ -2074,11 +2173,27 @@ const LogbookLaporanTab = ({ token, showToast }) => {
   const [error, setError] = useState('');
   const [items, setItems] = useState([]);
 
+  // --- Info paginasi dari server -- lihat handleGetSuperAdminLogbookList_/
+  // handleGetSuperAdminLaporanList_ (SuperAdmin.gs). Paginasi di sini
+  // berjalan di level MAHASISWA (bukan baris logbook/laporan), supaya
+  // request ke server SELALU kecil -- server hanya menarik logbook/
+  // laporan untuk maks `pageSize` mahasiswa sekaligus, tidak pernah
+  // untuk semua mahasiswa se-fakultas sekaligus (itu yang dulu memicu
+  // error "Limit Exceeded: URL Fetch URL Length" di GAS).
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
+  const [totalMahasiswa, setTotalMahasiswa] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
   const [tahunAjaranList, setTahunAjaranList] = useState([]);
   const [fakultasOptions, setFakultasOptions] = useState([]);
   const [selectedTahun, setSelectedTahun] = useState('');
   const [selectedFakultas, setSelectedFakultas] = useState('semua');
   const [statusFilter, setStatusFilter] = useState('semua');
+  // Pencarian nama/NIM HANYA menyaring item yang SUDAH dimuat di
+  // halaman saat ini -- bukan query ulang ke server. Untuk mencari NIM
+  // spesifik lintas semua halaman, pakai filter NIM di server lewat
+  // handleSearchNim (di bawah) yang mereset ke page 1 dengan filter NIM.
   const [searchTerm, setSearchTerm] = useState('');
 
   const [selectedIds, setSelectedIds] = useState([]);
@@ -2086,19 +2201,31 @@ const LogbookLaporanTab = ({ token, showToast }) => {
   const [bulkCatatan, setBulkCatatan] = useState('');
   const [isApplying, setIsApplying] = useState(false);
 
+  const applyListResult = (result) => {
+    setItems(result.items || []);
+    setTotalMahasiswa(result.totalMahasiswa ?? 0);
+    setTotalPages(result.totalPages ?? 1);
+  };
+
   const load = useCallback(async () => {
     setIsLoading(true);
     setError('');
     setSelectedIds([]);
     try {
-      const params = { tahunAjaranId: selectedTahun, fakultas: selectedFakultas === 'semua' ? '' : selectedFakultas, status: statusFilter === 'semua' ? '' : statusFilter };
+      const params = {
+        tahunAjaranId: selectedTahun,
+        fakultas: selectedFakultas === 'semua' ? '' : selectedFakultas,
+        status: statusFilter === 'semua' ? '' : statusFilter,
+        page,
+        pageSize,
+      };
       // getSuperAdminMeta (BUKAN getSuperAdminData) untuk isi dropdown --
       // permintaan list logbook/laporan-nya sendiri sudah cukup, tidak
       // perlu ditambah query universitas penuh cuma untuk 2 dropdown.
-      // Keduanya di-cache -- filter yang sama pernah dibuka tampil
-      // instan sambil diperbarui di belakang layar.
-      const listOpts = { onCacheHit: (cached) => setItems(cached || []) };
-      const [rows, meta] = await Promise.all([
+      // Keduanya di-cache -- filter/halaman yang sama pernah dibuka
+      // tampil instan sambil diperbarui di belakang layar.
+      const listOpts = { onCacheHit: (cached) => applyListResult(cached) };
+      const [result, meta] = await Promise.all([
         jenis === 'logbook' ? api.getSuperAdminLogbookList(token, params, listOpts) : api.getSuperAdminLaporanList(token, params, listOpts),
         api.getSuperAdminMeta(token, {
           onCacheHit: (cached) => {
@@ -2107,7 +2234,7 @@ const LogbookLaporanTab = ({ token, showToast }) => {
           },
         }),
       ]);
-      setItems(rows || []);
+      applyListResult(result);
       setTahunAjaranList(meta.tahunAjaranList || []);
       setFakultasOptions(meta.fakultasOptions || []);
       if (!selectedTahun && meta.tahunAjaranAktifId) setSelectedTahun(meta.tahunAjaranAktifId);
@@ -2116,12 +2243,18 @@ const LogbookLaporanTab = ({ token, showToast }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [token, jenis, selectedTahun, selectedFakultas, statusFilter]);
+  }, [token, jenis, selectedTahun, selectedFakultas, statusFilter, page]);
 
   useEffect(() => { load(); }, [load]);
 
+  // Ganti jenis/tahun/fakultas/status -> selalu kembali ke halaman 1,
+  // supaya tidak "terdampar" di halaman 5 saat filter baru mungkin
+  // cuma punya 2 halaman.
+  useEffect(() => { setPage(1); }, [jenis, selectedTahun, selectedFakultas, statusFilter]);
+
   const filteredItems = useMemo(() => {
     const term = (searchTerm || '').toLowerCase();
+    if (!term) return items;
     return items.filter(it => (it.mahasiswaNama || '').toLowerCase().includes(term) || (it.nim || '').toLowerCase().includes(term));
   }, [items, searchTerm]);
 
@@ -2170,7 +2303,7 @@ const LogbookLaporanTab = ({ token, showToast }) => {
       <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col gap-3">
         <div className="relative">
           <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 dark:text-slate-500" />
-          <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Cari nama atau NIM..."
+          <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Cari nama atau NIM di halaman ini..."
             className="w-full pl-9 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
         </div>
         <div className="flex flex-wrap gap-2">
@@ -2216,13 +2349,13 @@ const LogbookLaporanTab = ({ token, showToast }) => {
               <div className="w-5 h-5 border-2 rounded-md flex items-center justify-center transition-colors" style={{ borderColor: allFilteredSelected ? '#4F46E5' : '#CBD5E1', backgroundColor: allFilteredSelected ? '#4F46E5' : 'transparent' }}>
                 {allFilteredSelected && <CheckCircle className="w-3.5 h-3.5 text-white" />}
               </div>
-              Pilih Semua ({filteredItems.length} difilter)
+              Pilih Semua di Halaman Ini ({filteredItems.length})
             </button>
             {selectedIds.length > 0 && <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">{selectedIds.length} dipilih</span>}
           </div>
 
           {filteredItems.length === 0 ? (
-            <p className="text-center text-sm text-slate-400 dark:text-slate-500 py-10">Tidak ada data ditemukan.</p>
+            <p className="text-center text-sm text-slate-400 dark:text-slate-500 py-10">Tidak ada data di halaman ini. Coba halaman lain atau ganti filter.</p>
           ) : (
             <div className="divide-y divide-slate-50 dark:divide-slate-800 max-h-[560px] overflow-y-auto">
               {filteredItems.map(it => {
@@ -2245,6 +2378,26 @@ const LogbookLaporanTab = ({ token, showToast }) => {
               })}
             </div>
           )}
+
+          {/* Paginasi SERVER-SIDE -- per halaman MAHASISWA (maks 20),
+              bukan per baris logbook/laporan. Ini yang menjamin request
+              ke server selalu kecil, berapa pun total mahasiswa yang
+              cocok filter. */}
+          <div className="p-3 border-t border-slate-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2 bg-slate-50 dark:bg-slate-900">
+            <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 pl-1">
+              Mahasiswa {totalMahasiswa === 0 ? 0 : (page - 1) * pageSize + 1}-{Math.min(page * pageSize, totalMahasiswa)} dari {totalMahasiswa} • Hal {page}/{totalPages}
+            </span>
+            <div className="flex gap-1">
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={isLoading || page === 1}
+                className="p-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg disabled:opacity-40">
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={isLoading || page === totalPages}
+                className="p-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg disabled:opacity-40">
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

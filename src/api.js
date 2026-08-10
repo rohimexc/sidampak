@@ -477,13 +477,26 @@ export const api = {
   // laporan), jadi cache PENDEK (5 menit) dengan stale-while-revalidate:
   // buka tab yang sama lagi -> tampil instan dari cache, sambil diam-diam
   // ambil versi terbaru di belakang layar.
-  getSuperAdminData: (token, { tahunAjaranId, fakultas, prodi } = {}, opts = {}) =>
-    swr(`superAdminData_${token}_${tahunAjaranId || 'all'}_${fakultas || 'all'}_${prodi || 'all'}`, () =>
+  //
+  // PAGINASI SERVER-SIDE OPSIONAL -- lihat handleGetSuperAdminData_ di
+  // SuperAdmin.gs. Kirim `page` untuk mode paginasi (dipakai tab Data
+  // Mahasiswa, response jadi { mahasiswa, page, pageSize, totalMahasiswa,
+  // totalPages, ... }); JANGAN kirim `page` sama sekali untuk mode lama
+  // tanpa paginasi (dipakai tab Ringkasan lewat loadRingkasan -- BUTUH
+  // semua mahasiswa sekaligus untuk hitung total/rekap, jangan diubah
+  // jadi mode paginasi). `search` (opsional, mode paginasi saja) mencari
+  // nama/NIM DI SERVER supaya tetap menjangkau seluruh universitas
+  // walau datanya dipaginasi per halaman.
+  getSuperAdminData: (token, { tahunAjaranId, fakultas, prodi, search, page, pageSize } = {}, opts = {}) =>
+    swr(`superAdminData_${token}_${tahunAjaranId || 'all'}_${fakultas || 'all'}_${prodi || 'all'}_${search || 'none'}_p${page || 0}_${pageSize || 0}`, () =>
       apiGet('getSuperAdminData', {
         token,
         tahunAjaranId: tahunAjaranId || '',
         fakultas: fakultas || '',
         prodi: prodi || '',
+        search: search || '',
+        page: page || '',
+        pageSize: pageSize || '',
       }), {
       onCacheHit: opts.onCacheHit,
       maxAgeMs: 5 * 60 * 1000,
@@ -657,12 +670,24 @@ export const api = {
 
   // --- Manajemen Logbook & Laporan lintas universitas (ubah status
   // massal -- dipilih satu-satu ATAU seluruh hasil filter) ---
-  // Cache PENDEK (2 menit) -- status logbook/laporan berubah cukup
-  // sering (approve Mentor/DPL berjalan di luar kendali Admin
-  // Universitas), jadi tidak boleh basi lama, tapi tetap dicache
-  // supaya ganti-ganti filter yang SAMA berulang kali terasa instan.
-  getSuperAdminLogbookList: (token, { tahunAjaranId, fakultas, prodi, nim, status } = {}, opts = {}) =>
-    swr(`superAdminLogbook_${token}_${tahunAjaranId || 'all'}_${fakultas || 'all'}_${prodi || 'all'}_${nim || 'all'}_${status || 'all'}`, () =>
+  //
+  // PAGINASI SERVER-SIDE -- lihat handleGetSuperAdminLogbookList_/
+  // handleGetSuperAdminLaporanList_ di SuperAdmin.gs untuk penjelasan
+  // lengkap. Sebelumnya fungsi ini menarik SEMUA logbook/laporan yang
+  // cocok filter sekaligus (bisa memicu error "Limit Exceeded: URL
+  // Fetch URL Length" di GAS untuk fakultas besar) -- sekarang server
+  // hanya mengembalikan SATU HALAMAN mahasiswa (maks 50, lihat
+  // ADMIN_LIST_MAX_PAGE_SIZE_) beserta logbook/laporan mereka.
+  // Response bentuknya SEKARANG { items, page, pageSize, totalMahasiswa,
+  // totalPages } -- BUKAN array polos seperti sebelumnya.
+  //
+  // Cache key ikut menyertakan page/pageSize supaya tiap halaman
+  // dicache terpisah (pindah halaman lalu balik lagi -> instan dari
+  // cache). Cache PENDEK (2 menit) -- status logbook/laporan berubah
+  // cukup sering (approve Mentor/DPL berjalan di luar kendali Admin
+  // Universitas).
+  getSuperAdminLogbookList: (token, { tahunAjaranId, fakultas, prodi, nim, status, page, pageSize } = {}, opts = {}) =>
+    swr(`superAdminLogbook_${token}_${tahunAjaranId || 'all'}_${fakultas || 'all'}_${prodi || 'all'}_${nim || 'all'}_${status || 'all'}_p${page || 1}_${pageSize || 20}`, () =>
       apiGet('getSuperAdminLogbookList', {
         token,
         tahunAjaranId: tahunAjaranId || '',
@@ -670,12 +695,14 @@ export const api = {
         prodi: prodi || '',
         nim: nim || '',
         status: status || '',
+        page: page || 1,
+        pageSize: pageSize || 20,
       }), {
       onCacheHit: opts.onCacheHit,
       maxAgeMs: 2 * 60 * 1000,
     }),
-  getSuperAdminLaporanList: (token, { tahunAjaranId, fakultas, prodi, nim, status } = {}, opts = {}) =>
-    swr(`superAdminLaporan_${token}_${tahunAjaranId || 'all'}_${fakultas || 'all'}_${prodi || 'all'}_${nim || 'all'}_${status || 'all'}`, () =>
+  getSuperAdminLaporanList: (token, { tahunAjaranId, fakultas, prodi, nim, status, page, pageSize } = {}, opts = {}) =>
+    swr(`superAdminLaporan_${token}_${tahunAjaranId || 'all'}_${fakultas || 'all'}_${prodi || 'all'}_${nim || 'all'}_${status || 'all'}_p${page || 1}_${pageSize || 20}`, () =>
       apiGet('getSuperAdminLaporanList', {
         token,
         tahunAjaranId: tahunAjaranId || '',
@@ -683,6 +710,8 @@ export const api = {
         prodi: prodi || '',
         nim: nim || '',
         status: status || '',
+        page: page || 1,
+        pageSize: pageSize || 20,
       }), {
       onCacheHit: opts.onCacheHit,
       maxAgeMs: 2 * 60 * 1000,
