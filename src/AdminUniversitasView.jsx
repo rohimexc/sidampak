@@ -1931,6 +1931,137 @@ const AksesTab = ({ token, showToast }) => {
 };
 
 // =====================================================================
+// TAB: RESET KATA SANDI -- Admin Universitas mengetik sendiri NIM +
+// kata sandi baru mahasiswa, LANGSUNG menimpa yang lama (beda dari
+// tombol "Reset Kata Sandi" di MahasiswaDetailView yang generate
+// password ACAK). Berdiri sendiri sebagai tab supaya admin tidak perlu
+// cari/buka detail mahasiswa dulu -- cukup tahu NIM-nya.
+// Backend: handleSuperAdminSetMahasiswaPassword_ (SuperAdmin.gs), lewat
+// api.superAdminSetMahasiswaPassword(token, nim, newPassword).
+// =====================================================================
+const ResetPasswordTab = ({ token, showToast }) => {
+  const [nim, setNim] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Ringkasan sukses terakhir -- ditampilkan sampai form dipakai lagi,
+  // supaya admin punya jejak visual "barusan reset NIM berapa" tanpa
+  // perlu mengandalkan toast yang otomatis hilang setelah 3 detik.
+  const [lastSuccess, setLastSuccess] = useState(null);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const trimmedNim = nim.trim();
+
+    if (!trimmedNim || !newPassword) {
+      showToast('NIM dan kata sandi baru wajib diisi.', 'error');
+      return;
+    }
+    if (newPassword.length < 6) {
+      showToast('Kata sandi baru minimal 6 karakter.', 'error');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      showToast('Konfirmasi kata sandi tidak cocok.', 'error');
+      return;
+    }
+    if (!window.confirm(`Ganti kata sandi mahasiswa NIM ${trimmedNim} ke kata sandi baru yang Anda masukkan? Kata sandi lama langsung tidak berlaku.`)) return;
+
+    setIsSubmitting(true);
+    setLastSuccess(null);
+    try {
+      await api.superAdminSetMahasiswaPassword(token, trimmedNim, newPassword);
+      showToast(`Kata sandi NIM ${trimmedNim} berhasil diubah.`);
+      setLastSuccess({ nim: trimmedNim });
+      setNim('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setShowPassword(false);
+    } catch (err) {
+      showToast(err.message || 'Gagal mengubah kata sandi. Pastikan NIM benar.', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="max-w-lg mx-auto space-y-4">
+      <div className="bg-white dark:bg-slate-800 p-6 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-700">
+        <div className="flex items-center gap-3 mb-1">
+          <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center shrink-0">
+            <KeyRound className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+          </div>
+          <div>
+            <h2 className="font-bold text-slate-800 dark:text-slate-100 text-sm">Reset Kata Sandi Mahasiswa</h2>
+            <p className="text-[10px] text-slate-400 dark:text-slate-500">Masukkan NIM & kata sandi baru -- berlaku langsung</p>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+          <div>
+            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase block mb-1.5">NIM Mahasiswa</label>
+            <input
+              value={nim}
+              onChange={e => setNim(e.target.value)}
+              disabled={isSubmitting}
+              placeholder="Contoh: G20118043"
+              className="w-full p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
+            />
+          </div>
+
+          <div>
+            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase block mb-1.5">Kata Sandi Baru</label>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+                disabled={isSubmitting}
+                placeholder="Minimal 6 karakter"
+                className="w-full p-3 pr-11 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
+              />
+              <button type="button" onClick={() => setShowPassword(v => !v)} tabIndex={-1}
+                className="absolute right-3.5 top-3 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300">
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase block mb-1.5">Konfirmasi Kata Sandi Baru</label>
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={confirmPassword}
+              onChange={e => setConfirmPassword(e.target.value)}
+              disabled={isSubmitting}
+              placeholder="Ulangi kata sandi baru"
+              className="w-full p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
+            />
+          </div>
+
+          <button type="submit" disabled={isSubmitting}
+            className="w-full py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-70 hover:shadow-lg hover:shadow-indigo-500/20 transition-all active:scale-[0.98]">
+            {isSubmitting ? <><ButtonSpinner /> Menyimpan...</> : <><KeyRound className="w-4 h-4" /> Reset Kata Sandi</>}
+          </button>
+        </form>
+
+        {lastSuccess && (
+          <div className="mt-4 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-100 dark:border-emerald-800/50 p-3 rounded-xl flex items-center gap-2">
+            <CheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">Kata sandi NIM {lastSuccess.nim} berhasil diganti.</p>
+          </div>
+        )}
+
+        <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-4 leading-relaxed">
+          Kata sandi baru langsung aktif menggantikan yang lama -- tidak ditampilkan lagi setelah form ini ditutup/direset, pastikan sudah dicatat/dibagikan ke mahasiswa sebelum meninggalkan halaman ini.
+        </p>
+      </div>
+    </div>
+  );
+};
+
+// =====================================================================
 // TAB: LOGBOOK & LAPORAN -- ubah status massal, dipilih satu-satu ATAU
 // seluruh hasil filter sekaligus. Admin Universitas SAJA.
 // =====================================================================
@@ -2218,6 +2349,7 @@ export default function AdminUniversitasView() {
     ['logboklaporan', 'Logbook & Laporan', FileText],
     ['dpl', 'Manajemen DPL', GraduationCap],
     ['akses', 'Akses Portal', KeyRound],
+    ['resetpassword', 'Reset Sandi', Lock],
   ];
 
   return (
@@ -2265,6 +2397,7 @@ export default function AdminUniversitasView() {
         {activeTab === 'logboklaporan' && <LogbookLaporanTab token={session.token} showToast={showToast} />}
         {activeTab === 'dpl' && <DplManagementTab token={session.token} showToast={showToast} />}
         {activeTab === 'akses' && <AksesTab token={session.token} showToast={showToast} />}
+        {activeTab === 'resetpassword' && <ResetPasswordTab token={session.token} showToast={showToast} />}
       </div>
 
       {/* BOTTOM NAVBAR -- khusus HP & tablet (di bawah breakpoint lg).

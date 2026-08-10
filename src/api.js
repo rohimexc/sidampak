@@ -606,10 +606,20 @@ export const api = {
     cacheClearPrefix('superAdminData_');
     return result;
   },
-  // Reset password TIDAK perlu bersihkan cache apa pun -- password tidak
-  // pernah ditampilkan di listing mana pun, hanya sekali di layar hasil.
+  // Reset password (VERSI ACAK) TIDAK perlu bersihkan cache apa pun --
+  // password tidak pernah ditampilkan di listing mana pun, hanya sekali
+  // di layar hasil.
   superAdminResetMahasiswaPassword: (token, nim) =>
     apiPost('superAdminResetMahasiswaPassword', { token, nim }),
+  // Reset password VERSI MANUAL -- admin mengetik sendiri NIM + password
+  // baru (bukan digenerate acak seperti fungsi di atas). Dipakai tab
+  // "Reset Sandi" di AdminUniversitasView.jsx. Backend
+  // (handleSuperAdminSetMahasiswaPassword_ di SuperAdmin.gs) menyimpan
+  // password APA ADANYA (plaintext, konsisten dengan skema kolom
+  // Mahasiswa.Password yang sudah ada) -- sama seperti fungsi reset
+  // acak di atas, TIDAK perlu bersihkan cache apa pun.
+  superAdminSetMahasiswaPassword: (token, nim, newPassword) =>
+    apiPost('superAdminSetMahasiswaPassword', { token, nim, newPassword }),
   superAdminUpdateMentor: async (token, { email, nama, jabatan, wa, namaMitra }) => {
     const result = await apiPost('superAdminUpdateMentor', { token, email, nama, jabatan, wa, namaMitra });
     cacheClearPrefix('superAdminData_');
