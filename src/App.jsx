@@ -1419,7 +1419,7 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
             <div className="bg-amber-50 dark:bg-amber-900/20 p-5 rounded-[2rem] border border-amber-100 dark:border-amber-800/50 flex gap-4 items-start shadow-sm">
               <Info className="w-6 h-6 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5" />
               <p className="text-sm text-amber-700 dark:text-amber-200 font-medium leading-relaxed">
-                Data ini akan digunakan untuk mengirimkan <b className="text-amber-900 dark:text-amber-100">Link Review</b> ke Mentor/DPL via WhatsApp. Pastikan data yang dimasukkan sudah benar dan sesuai termasuk nomor WhatsApp dan email aktif.
+                Data ini akan digunakan untuk mengirimkan <b className="text-amber-900 dark:text-amber-100">Link Review</b> ke Mentor/DPL via WhatsApp atau Email. Pastikan data yang dimasukkan sudah benar dan sesuai termasuk nomor WhatsApp dan email aktif.
               </p>
             </div>
 
