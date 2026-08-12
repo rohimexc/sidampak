@@ -36,7 +36,7 @@ const PRODI_LIST_FALLBACK = [
   'Pendidikan Fisika', 'Pendidikan Kimia', 'Pendidikan Matematika', 'Pendidikan Biologi',
   'MIPA', 'Pendidikan IPS', 'Ilmu Administrasi Publik', 'Ilmu Pemerintahan', 'Sosiologi',
   'Antropologi', 'Ilmu Komunikasi', 'Ilmu Ekonomi Pembangunan', 'Manajemen',
-  'Akuntansi Sektor Publik', 'Akuntansi', 'Ilmu Hukum', 'Agroteknologi', 'Agribisnis',
+  'Akuntansi Sektor Publik', 'Akuntansi', 'Ilmu Hukum', 'Agroteknologi', 'Agribisnis', 'Proteksi Tanaman',
   'Teknik Sipil', 'Arsitektur', 'Teknik Mesin', 'Teknik Rekayasa Kelistrikan',
   'Teknik Elektro', 'Teknik Informatika', 'Teknik Geologi', 'Perencanaan Wilayah dan Kota',
   'Sistem Informasi', 'Fisika', 'Matematika', 'Statistika', 'Kimia', 'Biologi', 'Farmasi',
