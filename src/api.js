@@ -157,10 +157,23 @@ export const api = {
     return freshProfile;
   },
 
+  // --- PROFIL Bagian 4: Dokumen Pendukung ---
+  // SEKARANG diunggah SATU PER SATU begitu mahasiswa memilih file (lihat
+  // handleDocUpload di ProfileSetupView, App.jsx), BUKAN lagi digabung
+  // sebagai payload base64 di dalam api.saveProfile. Backend (action
+  // 'uploadDokumen' -> handleUploadDokumen_ di Api.gs) langsung meng-
+  // upload ke Drive DAN mempersist link-nya ke database dalam satu
+  // request kecil -- kalau gagal, HANYA dokumen ini yang gagal, tidak
+  // menyeret dokumen lain atau field profil lain yang sudah tersimpan.
+  //
+  // payload: { nim, docType, fileName, mimeType, fileData(base64) }
+  // return : { docType, url }
+  uploadDokumen: (payload) => apiPost('uploadDokumen', payload),
+
   // --- PROFIL Bagian 1-3 -- LANGSUNG ke Supabase lewat RPC (lihat
   // supabase_profil_rpc.sql) -- TIDAK lewat Apps Script sama sekali.
-  // Bagian 4 (berkas PDF) TETAP pakai api.saveProfile di atas (perlu
-  // upload ke Google Drive lewat GAS).
+  // Bagian 4 (berkas PDF) SEKARANG pakai api.uploadDokumen di atas
+  // (satu file per panggilan, bukan lagi lewat api.saveProfile).
   //
   // Semua fungsi ini butuh `password` mentah mahasiswa (disimpan
   // sementara di sessionStorage lewat session.savePassword saat login

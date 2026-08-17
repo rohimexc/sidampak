@@ -923,7 +923,7 @@ const ResetPasswordView = ({ token, onDone }) => {
 };
 
 // 3. Profile Setup View
-const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggestions, dosenList, onSave, onBagianSaved, onSessionExpired, onBack, showToast }) => {
+const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggestions, dosenList, onSave, onBagianSaved, onDocUploaded, onSessionExpired, onBack, showToast }) => {
   const [step, setStep] = useState(1);
   const [isSaving, setIsSaving] = useState(false); // khusus tombol "Simpan Berkas" (Bagian 4, lewat Apps Script)
   // isSavingStep: loading terpisah per bagian (1/2/3) -- masing-masing
@@ -978,6 +978,35 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
       dokumen: defaultDokumen 
     };
   });
+
+  // Status upload per dokumen (Bagian 4) -- 'idle' | 'uploading' | 'done' | 'error'.
+  // Setiap dokumen sekarang diupload SATU-SATU begitu dipilih (lihat
+  // handleDocUpload di bawah), BUKAN lagi menunggu tombol "Simpan Berkas"
+  // untuk mengunggah semuanya sekaligus dalam satu request raksasa.
+  const [docStatus, setDocStatus] = useState({});
+
+  // --- Queue upload dokumen: maks 2 upload berjalan bersamaan supaya
+  // tidak membebani eksekusi Apps Script kalau mahasiswa memilih
+  // beberapa file dengan cepat berurutan.
+  const MAX_CONCURRENT_UPLOADS = 2;
+  const uploadQueueRef = useRef([]);
+  const activeUploadsRef = useRef(0);
+
+  const runNextInQueue = useCallback(() => {
+    if (activeUploadsRef.current >= MAX_CONCURRENT_UPLOADS) return;
+    const next = uploadQueueRef.current.shift();
+    if (!next) return;
+    activeUploadsRef.current += 1;
+    next().finally(() => {
+      activeUploadsRef.current -= 1;
+      runNextInQueue();
+    });
+  }, []);
+
+  const enqueueUpload = useCallback((task) => {
+    uploadQueueRef.current.push(task);
+    runNextInQueue();
+  }, [runNextInQueue]);
   
   // Bagian 1-3 dimuat ULANG langsung dari Supabase begitu Setup Profil
   // dibuka (Supabase sekarang sumber kebenaran untuk bagian ini, BUKAN
@@ -1093,39 +1122,69 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
     }
   };
 
-  // Upload dokumen: simpan sebagai data URL base64 di state (sama seperti
-  // foto logbook) -- baru benar-benar diupload ke Drive saat formData
-  // dikirim lewat onSave -> api.saveProfile.
+  // Upload dokumen: SEKARANG langsung diupload ke Drive begitu dipilih
+  // (lewat api.uploadDokumen -> action 'uploadDokumen' di Api.gs), BUKAN
+  // lagi disimpan sebagai base64 di state menunggu tombol "Simpan Berkas".
+  // Ini menghilangkan bug "dokumen hilang setelah disimpan" (setiap file
+  // sekarang jadi transaksi kecil independen, langsung dipersist ke
+  // server begitu berhasil upload -- bukan bagian dari satu request
+  // raksasa yang bisa gagal total di tengah jalan) DAN membuat "Simpan
+  // Berkas" jadi jauh lebih cepat karena tidak lagi membawa payload file.
   const handleDocUpload = (docType, e) => {
     const file = e.target.files[0];
-    if (file) {
-      if (file.type !== 'application/pdf') {
-        showToast('Hanya format PDF yang diizinkan', 'error');
-        return;
-      }
-      if (file.size > 5 * 1024 * 1024) {
-        showToast('Ukuran file maksimal 5MB', 'error');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData(prev => ({
-          ...prev,
-          dokumen: { ...(prev.dokumen || {}), [docType]: reader.result }
-        }));
-        showToast(`${file.name} terpilih.`);
-      };
-      reader.readAsDataURL(file);
+    e.target.value = ''; // supaya bisa pilih ulang file yang sama kalau mau retry
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      showToast('Hanya format PDF yang diizinkan', 'error');
+      return;
     }
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('Ukuran file maksimal 5MB', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const fileData = reader.result; // data URL base64
+
+      setDocStatus(prev => ({ ...prev, [docType]: 'uploading' }));
+
+      enqueueUpload(async () => {
+        try {
+          const result = await api.uploadDokumen({
+            nim: currentNim,
+            docType,
+            fileName: file.name,
+            mimeType: file.type,
+            fileData,
+          });
+          setFormData(prev => ({
+            ...prev,
+            dokumen: { ...(prev.dokumen || {}), [docType]: result.url },
+          }));
+          setDocStatus(prev => ({ ...prev, [docType]: 'done' }));
+          // Kabari App.jsx supaya `profile` global ikut ter-update
+          // SEKARANG JUGA -- sama seperti pola onBagianSaved untuk
+          // Bagian 1-3, supaya kalau mahasiswa tutup halaman ini
+          // langsung sesudah upload, Dashboard tetap melihat data terbaru.
+          onDocUploaded?.({ docType, url: result.url });
+          showToast(`${file.name} berhasil diunggah.`);
+        } catch (err) {
+          setDocStatus(prev => ({ ...prev, [docType]: 'error' }));
+          showToast(err.message || `Gagal mengunggah ${file.name}.`, 'error');
+        }
+      });
+    };
+    reader.readAsDataURL(file);
   };
 
   // Helper: tampilkan nama file kalau dokumen berupa link Drive (sudah
-  // tersimpan), atau "Dokumen terpilih" kalau masih data URL base64 (baru
-  // dipilih, belum disubmit), atau placeholder kalau kosong.
+  // tersimpan), atau placeholder kalau kosong. Status "sedang diunggah"
+  // ditampilkan lewat DocStatusBadge, bukan lagi lewat label ini.
   const getDocLabel = (docType) => {
     const val = formData.dokumen?.[docType];
     if (!val) return 'Pilih File PDF...';
-    if (String(val).indexOf('data:') === 0) return 'Dokumen baru terpilih (belum disimpan)';
     return 'Dokumen tersimpan (klik untuk ganti)';
   };
 
@@ -1237,13 +1296,18 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
     setShowMapPicker(true);
   };
 
-  const handleFinalSave = async () => {
-    setIsSaving(true);
-    try {
-      await onSave(formData);
-    } finally {
-      setIsSaving(false);
+  // "Selesai" (dulu "Simpan Berkas") -- SEKARANG hanya menutup Setup
+  // Profil. Dokumen sudah tersimpan satu-satu begitu diupload (lihat
+  // handleDocUpload), jadi tidak ada lagi payload file yang perlu
+  // dikirim di sini -- makanya tidak ada lagi loading lama seperti dulu.
+  const handleFinish = () => {
+    const stillUploading = Object.values(docStatus).some(s => s === 'uploading');
+    if (stillUploading) {
+      showToast('Tunggu proses unggah dokumen selesai terlebih dahulu.', 'error');
+      return;
     }
+    showToast('Setup profil selesai!');
+    onSave();
   };
 
   return (
@@ -1463,101 +1527,56 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
             <div className="bg-emerald-50 dark:bg-emerald-900/20 p-5 rounded-[2rem] border border-emerald-100 dark:border-emerald-800/50 flex gap-4 items-start shadow-sm">
               <FileText className="w-6 h-6 text-emerald-500 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
               <p className="text-sm text-emerald-700 dark:text-emerald-200 font-medium leading-relaxed">
-                Unggah berkas pendukung administrasi Anda (Opsional). Pastikan semua berkas berformat <b className="text-emerald-900 dark:text-emerald-100">PDF</b> (Maks 5MB per file).
+                Unggah berkas pendukung administrasi Anda (Opsional). Pastikan semua berkas berformat <b className="text-emerald-900 dark:text-emerald-100">PDF</b> (Maks 5MB per file). Setiap berkas langsung diunggah begitu dipilih -- tidak perlu menunggu tombol "Selesai" di bawah.
               </p>
             </div>
 
             <div className="bg-white dark:bg-slate-800 p-6 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-700 space-y-5">
-              
-              {/* Surat Tugas Mahasiswa */}
-              <div>
-                <label className="block text-xs font-bold tracking-wide text-slate-500 dark:text-slate-400 uppercase mb-2">Surat Tugas Mahasiswa</label>
-                <div className="flex items-center gap-3">
-                  <div className="relative flex-1">
-                    <input type="file" accept=".pdf" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={(e) => handleDocUpload('suratTugas', e)} />
-                    <div className={`p-4 border border-slate-200 dark:border-slate-600 rounded-2xl flex items-center justify-between transition-colors ${formData.dokumen?.suratTugas ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:bg-slate-700'}`}>
-                      <div className="flex items-center gap-3 truncate">
-                        <FileText className={`w-5 h-5 shrink-0 ${formData.dokumen?.suratTugas ? 'text-indigo-500' : 'text-slate-400 dark:text-slate-500'}`} />
-                        <span className={`text-sm truncate font-medium ${formData.dokumen?.suratTugas ? 'text-indigo-800' : 'text-slate-500 dark:text-slate-400'}`}>
-                          {getDocLabel('suratTugas')}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
 
-              {/* SK Pengangkatan DPL */}
-              <div>
-                <label className="block text-xs font-bold tracking-wide text-slate-500 dark:text-slate-400 uppercase mb-2">SK Pengangkatan DPL</label>
-                <div className="flex items-center gap-3">
-                  <div className="relative flex-1">
-                    <input type="file" accept=".pdf" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={(e) => handleDocUpload('skDpl', e)} />
-                    <div className={`p-4 border border-slate-200 dark:border-slate-600 rounded-2xl flex items-center justify-between transition-colors ${formData.dokumen?.skDpl ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:bg-slate-700'}`}>
-                      <div className="flex items-center gap-3 truncate">
-                        <FileText className={`w-5 h-5 shrink-0 ${formData.dokumen?.skDpl ? 'text-indigo-500' : 'text-slate-400 dark:text-slate-500'}`} />
-                        <span className={`text-sm truncate font-medium ${formData.dokumen?.skDpl ? 'text-indigo-800' : 'text-slate-500 dark:text-slate-400'}`}>
-                          {getDocLabel('skDpl')}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <DocUploadRow
+                label="Surat Tugas Mahasiswa"
+                docType="suratTugas"
+                value={formData.dokumen?.suratTugas}
+                status={docStatus.suratTugas}
+                labelText={getDocLabel('suratTugas')}
+                onUpload={handleDocUpload}
+              />
 
-              {/* Kerjasama */}
-              <div>
-                <label className="block text-xs font-bold tracking-wide text-slate-500 dark:text-slate-400 uppercase mb-2">Kerjasama Mitra - Prodi</label>
-                <div className="flex items-center gap-3">
-                  <div className="relative flex-1">
-                    <input type="file" accept=".pdf" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={(e) => handleDocUpload('kerjasama', e)} />
-                    <div className={`p-4 border border-slate-200 dark:border-slate-600 rounded-2xl flex items-center justify-between transition-colors ${formData.dokumen?.kerjasama ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:bg-slate-700'}`}>
-                      <div className="flex items-center gap-3 truncate">
-                        <FileText className={`w-5 h-5 shrink-0 ${formData.dokumen?.kerjasama ? 'text-indigo-500' : 'text-slate-400 dark:text-slate-500'}`} />
-                        <span className={`text-sm truncate font-medium ${formData.dokumen?.kerjasama ? 'text-indigo-800' : 'text-slate-500 dark:text-slate-400'}`}>
-                          {getDocLabel('kerjasama')}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <DocUploadRow
+                label="SK Pengangkatan DPL"
+                docType="skDpl"
+                value={formData.dokumen?.skDpl}
+                status={docStatus.skDpl}
+                labelText={getDocLabel('skDpl')}
+                onUpload={handleDocUpload}
+              />
 
-              {/* RPS */}
-              <div>
-                <label className="block text-xs font-bold tracking-wide text-slate-500 dark:text-slate-400 uppercase mb-2">Rencana Pembelajaran (RPS)</label>
-                <div className="flex items-center gap-3">
-                  <div className="relative flex-1">
-                    <input type="file" accept=".pdf" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={(e) => handleDocUpload('rps', e)} />
-                    <div className={`p-4 border border-slate-200 dark:border-slate-600 rounded-2xl flex items-center justify-between transition-colors ${formData.dokumen?.rps ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:bg-slate-700'}`}>
-                      <div className="flex items-center gap-3 truncate">
-                        <FileText className={`w-5 h-5 shrink-0 ${formData.dokumen?.rps ? 'text-indigo-500' : 'text-slate-400 dark:text-slate-500'}`} />
-                        <span className={`text-sm truncate font-medium ${formData.dokumen?.rps ? 'text-indigo-800' : 'text-slate-500 dark:text-slate-400'}`}>
-                          {getDocLabel('rps')}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <DocUploadRow
+                label="Kerjasama Mitra - Prodi"
+                docType="kerjasama"
+                value={formData.dokumen?.kerjasama}
+                status={docStatus.kerjasama}
+                labelText={getDocLabel('kerjasama')}
+                onUpload={handleDocUpload}
+              />
 
-              {/* KRS */}
-              <div>
-                <label className="block text-xs font-bold tracking-wide text-slate-500 dark:text-slate-400 uppercase mb-2">KRS SIGA-8</label>
-                <div className="flex items-center gap-3">
-                  <div className="relative flex-1">
-                    <input type="file" accept=".pdf" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={(e) => handleDocUpload('krs', e)} />
-                    <div className={`p-4 border border-slate-200 dark:border-slate-600 rounded-2xl flex items-center justify-between transition-colors ${formData.dokumen?.krs ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:bg-slate-700'}`}>
-                      <div className="flex items-center gap-3 truncate">
-                        <FileText className={`w-5 h-5 shrink-0 ${formData.dokumen?.krs ? 'text-indigo-500' : 'text-slate-400 dark:text-slate-500'}`} />
-                        <span className={`text-sm truncate font-medium ${formData.dokumen?.krs ? 'text-indigo-800' : 'text-slate-500 dark:text-slate-400'}`}>
-                          {getDocLabel('krs')}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <DocUploadRow
+                label="Rencana Pembelajaran (RPS)"
+                docType="rps"
+                value={formData.dokumen?.rps}
+                status={docStatus.rps}
+                labelText={getDocLabel('rps')}
+                onUpload={handleDocUpload}
+              />
+
+              <DocUploadRow
+                label="KRS SIGA-8"
+                docType="krs"
+                value={formData.dokumen?.krs}
+                status={docStatus.krs}
+                labelText={getDocLabel('krs')}
+                onUpload={handleDocUpload}
+              />
 
             </div>
           </div>
@@ -1568,8 +1587,8 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
       <div className="p-6 bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700 flex flex-col gap-3 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.05)] relative z-20">
         {/* Tombol "Simpan Bagian Ini" -- Bagian 1, 2, 3 langsung ke Supabase,
             terpisah dari navigasi Kembali/Lanjut di bawahnya. Bagian 4 tidak
-            punya tombol ini -- ia sudah punya "Simpan Berkas" sendiri di
-            baris navigasi (lewat Apps Script, perlu upload ke Drive). */}
+            punya tombol ini -- dokumennya sudah tersimpan satu-satu begitu
+            diupload (lihat handleDocUpload), tidak perlu tombol simpan lagi. */}
         {step < 4 && (
           <button
             onClick={step === 1 ? handleSaveStep1 : step === 2 ? handleSaveStep2 : handleSaveStep3}
@@ -1607,11 +1626,10 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
             </button>
           ) : (
             <button 
-              onClick={handleFinalSave} 
-              disabled={isSaving}
-              className="flex-1 py-4 font-bold rounded-2xl text-white shadow-lg transition-all flex justify-center items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-500 dark:from-emerald-400 dark:to-teal-400 shadow-emerald-500/30 dark:shadow-emerald-400/20 hover:shadow-emerald-500/50 dark:hover:shadow-emerald-400/40 active:scale-95 disabled:opacity-70"
+              onClick={handleFinish} 
+              className="flex-1 py-4 font-bold rounded-2xl text-white shadow-lg transition-all flex justify-center items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-500 dark:from-emerald-400 dark:to-teal-400 shadow-emerald-500/30 dark:shadow-emerald-400/20 hover:shadow-emerald-500/50 dark:hover:shadow-emerald-400/40 active:scale-95"
             >
-              {isSaving ? <><ButtonSpinner /> Menyimpan...</> : <><CheckCircle className="w-5 h-5" /> Simpan Berkas</>}
+              <CheckCircle className="w-5 h-5" /> Selesai
             </button>
           )}
         </div>
@@ -1675,6 +1693,66 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
     </div>
   );
 };
+
+// Badge status upload per dokumen (Bagian 4) -- 'uploading' | 'done' | 'error'.
+// Dipakai di dalam DocUploadRow, dipisah supaya mudah dipakai ulang di
+// kelima baris dokumen tanpa duplikasi markup.
+const DocStatusBadge = ({ status }) => {
+  if (status === 'uploading') {
+    return (
+      <span className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg">
+        <Loader2 className="w-3 h-3 animate-spin" /> Mengunggah...
+      </span>
+    );
+  }
+  if (status === 'done') {
+    return (
+      <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-lg">
+        <CheckCircle className="w-3 h-3" /> Tersimpan
+      </span>
+    );
+  }
+  if (status === 'error') {
+    return (
+      <span className="flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-100 px-2 py-1 rounded-lg">
+        <AlertCircle className="w-3 h-3" /> Gagal, coba lagi
+      </span>
+    );
+  }
+  return null;
+};
+
+// Satu baris upload dokumen pendukung (Bagian 4) -- upload file langsung
+// memicu handleDocUpload(docType, e) di ProfileSetupView, yang akan
+// mengunggah file itu SENDIRIAN ke server (lihat catatan di
+// handleDocUpload) tanpa menunggu dokumen lain atau tombol "Selesai".
+const DocUploadRow = ({ label, docType, value, status, labelText, onUpload }) => (
+  <div>
+    <div className="flex items-center justify-between mb-2">
+      <label className="block text-xs font-bold tracking-wide text-slate-500 dark:text-slate-400 uppercase">{label}</label>
+      <DocStatusBadge status={status} />
+    </div>
+    <div className="flex items-center gap-3">
+      <div className="relative flex-1">
+        <input
+          type="file"
+          accept=".pdf"
+          disabled={status === 'uploading'}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 disabled:cursor-not-allowed"
+          onChange={(e) => onUpload(docType, e)}
+        />
+        <div className={`p-4 border border-slate-200 dark:border-slate-600 rounded-2xl flex items-center justify-between transition-colors ${value ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:bg-slate-700'}`}>
+          <div className="flex items-center gap-3 truncate">
+            <FileText className={`w-5 h-5 shrink-0 ${value ? 'text-indigo-500' : 'text-slate-400 dark:text-slate-500'}`} />
+            <span className={`text-sm truncate font-medium ${value ? 'text-indigo-800' : 'text-slate-500 dark:text-slate-400'}`}>
+              {labelText}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+);
 // 4. Dashboard View
 const DashboardView = ({ profile, logbooks, isLogbooksLoading, isLaporanLoading, localDraftsList: localDraftsProp, onNewLogbook, onEditProfile, onLogout, showToast, onEditLogbook, onDeleteLogbook, onEditLocalDraft, onDiscardLocalDraft, onViewLaporan, onViewAllLogs, themeMode, onToggleTheme }) => {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -3514,24 +3592,15 @@ export default function App() {
     setLocalDraftsList(localDrafts.list(user.nim));
   };
 
-  // saveProfile mengirim seluruh formData (termasuk dokumen base64 baru &
-  // mataKuliah) ke server. Server menangani upload Drive & upsert semua
-  // tabel terkait (Mahasiswa, Program, MkRekognisi, DokumenPendukung,
-  // Mentor, Dosen, Pembimbing), LALU langsung mengembalikan profil
-  // lengkap terbaru (termasuk link Drive hasil upload) di response yang
-  // sama -- TIDAK perlu memanggil getProfile lagi sesudahnya. Ini
-  // menghapus satu round-trip penuh ke GAS, yang sebelumnya jadi sumber
-  // utama "simpan profil" terasa lama.
-  const handleSaveProfile = async (data) => {
-    try {
-      const freshProfile = await api.saveProfile({ ...data, nim: user.nim, namaMahasiswa: data.nama });
-      setProfile(freshProfile);
-      setView('dashboard');
-      showToast('Profil berhasil disimpan!');
-    } catch (err) {
-      showToast(err.message || 'Gagal menyimpan profil.', 'error');
-      throw err; // supaya ProfileSetupView tahu submit gagal & berhenti loading
-    }
+  // handleSaveProfile SEKARANG hanya menutup Setup Profil & kembali ke
+  // Dashboard -- TIDAK lagi memanggil api.saveProfile dengan payload
+  // dokumen base64 (Bagian 4 sudah tersimpan satu-satu lewat
+  // api.uploadDokumen begitu tiap file dipilih, lihat handleDocUpload
+  // di ProfileSetupView). Profil selalu sudah up to date di sini lewat
+  // onBagianSaved (Bagian 1-3) & onDocUploaded (Bagian 4) yang berjalan
+  // sepanjang proses, jadi tidak perlu fetch ulang di titik ini.
+  const handleSaveProfile = () => {
+    setView('dashboard');
   };
 
   // Dipanggil ProfileSetupView SETELAH Bagian 1/2/3 berhasil disimpan
@@ -3542,6 +3611,17 @@ export default function App() {
   // Supabase, tapi `profile` di App.jsx belum tahu).
   const handleBagianSaved = (partial) => {
     setProfile(prev => ({ ...(prev || { nim: user?.nim }), ...partial }));
+  };
+
+  // Dipanggil ProfileSetupView SETELAH satu dokumen pendukung (Bagian 4)
+  // berhasil diupload ke Drive & dipersist ke server -- supaya `profile`
+  // di sini ikut melihat link dokumen terbaru itu SEKARANG JUGA, sama
+  // seperti pola onBagianSaved di atas untuk Bagian 1-3.
+  const handleDocUploaded = ({ docType, url }) => {
+    setProfile(prev => ({
+      ...(prev || { nim: user?.nim }),
+      dokumen: { ...((prev && prev.dokumen) || {}), [docType]: url },
+    }));
   };
 
   // saveLogbook mengirim foto sebagai data URL base64 (file baru) atau URL
@@ -3654,6 +3734,7 @@ export default function App() {
             dosenList={dosenList}
             onSave={handleSaveProfile} 
             onBagianSaved={handleBagianSaved}
+            onDocUploaded={handleDocUploaded}
             onSessionExpired={handleLogout}
             // Tombol "Kembali" hanya muncul kalau profil SUDAH benar-benar lengkap
             onBack={(profile && profile.nama && profile.email && profile.prodi && profile.fakultas && profile.lokasi) ? () => setView('dashboard') : null} 
