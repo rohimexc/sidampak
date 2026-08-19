@@ -201,6 +201,27 @@ const getSafeImageUrl = (url) => {
   return url;
 };
 
+// Ekstrak Drive fileId dari APA PUN bentuknya -- baik itu string ID
+// mentah (kalau kolom Supabase memang cuma nyimpan ID), maupun URL
+// lengkap getUrl() dari GAS (https://drive.google.com/file/d/<id>/view?...).
+// Regex sama persis dengan yang dipakai getSafeImageUrl untuk foto logbook,
+// supaya konsisten satu pola di seluruh app.
+const extractDriveFileId = (value) => {
+  if (!value) return '';
+  const match = String(value).match(/[-\w]{25,}/);
+  return match ? match[0] : '';
+};
+
+// Selalu bangun ulang jadi link /preview -- viewer Drive versi minimal
+// (tanpa tombol share/edit/komentar), yang juga dipakai Drive untuk
+// iframe embed. TIDAK ADA panggilan fetch/API sama sekali di sini --
+// murni string di sisi client, baik value-nya cuma ID atau URL penuh,
+// jadi tidak membebani kuota Supabase/GAS sama sekali.
+const getDrivePreviewUrl = (value) => {
+  const id = extractDriveFileId(value);
+  return id ? `https://drive.google.com/file/d/${id}/preview` : value;
+};
+
 // Helper warna badge status logbook/laporan, dipakai di DashboardView,
 // LogbookTableView, dan ReviewerView supaya konsisten di satu tempat.
 const getStatusBadgeClass = (status) => {
@@ -1726,6 +1747,10 @@ const DocStatusBadge = ({ status }) => {
 // memicu handleDocUpload(docType, e) di ProfileSetupView, yang akan
 // mengunggah file itu SENDIRIAN ke server (lihat catatan di
 // handleDocUpload) tanpa menunggu dokumen lain atau tombol "Selesai".
+// Tombol Preview (ikon mata) di kanan hanya muncul kalau dokumen ini
+// sudah punya link tersimpan -- klik langsung membuka viewer PDF minimal
+// bawaan Google Drive di tab baru, TANPA fetch/API apa pun ke backend
+// kita (Supabase/GAS) sama sekali, jadi tidak ada kuota yang terpakai.
 const DocUploadRow = ({ label, docType, value, status, labelText, onUpload }) => (
   <div>
     <div className="flex items-center justify-between mb-2">
@@ -1750,6 +1775,19 @@ const DocUploadRow = ({ label, docType, value, status, labelText, onUpload }) =>
           </div>
         </div>
       </div>
+
+      {value && (
+        <a
+          href={getDrivePreviewUrl(value)}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          title="Pratinjau dokumen"
+          className="relative z-20 shrink-0 w-12 h-12 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl flex items-center justify-center transition-colors shadow-sm"
+        >
+          <Eye className="w-5 h-5" />
+        </a>
+      )}
     </div>
   </div>
 );
