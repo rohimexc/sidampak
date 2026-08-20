@@ -237,6 +237,13 @@ const getStatusBadgeClass = (status) => {
 // --- COMPONENTS ---
 
 // 1. Reusable UI Components
+// Semua alert/toast (sukses maupun error) SEKARANG konsisten tampil DI
+// TENGAH layar (fixed inset-0, flex items-center justify-center) --
+// baik di mobile maupun desktop -- supaya pesan tidak pernah terlewat
+// dan selalu mudah dilihat di area jangkauan jempol pada layar HP.
+// Sebelumnya toast sukses muncul di pojok atas (mudah tertutup notch/
+// status bar di sebagian HP) sementara hanya toast error yang di tengah;
+// sekarang keduanya memakai wrapper & posisi yang sama, hanya beda ikon.
 const Toast = ({ message, type = 'success', onClose }) => {
   useEffect(() => {
     if (!message) return;
@@ -246,23 +253,12 @@ const Toast = ({ message, type = 'success', onClose }) => {
 
   if (!message) return null;
 
-  // Toast error (mis. Kode MK duplikat, validasi gagal, dll) ditampilkan
-  // DI TENGAH layar supaya lebih kelihatan/tidak terlewat -- toast sukses
-  // tetap di atas seperti biasa (tidak mengganggu, konfirmasi ringan).
   const isError = type === 'error';
 
   return (
-    <div className={
-      isError
-        ? "fixed inset-0 z-50 flex items-center justify-center px-6 pointer-events-none"
-        : "absolute top-4 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-top-4 fade-in duration-300 w-11/12 max-w-sm pointer-events-none"
-    }>
-      <div className={
-        isError
-          ? "bg-slate-900 text-white px-5 py-4 rounded-2xl shadow-2xl text-sm font-medium flex items-center gap-3 border border-slate-700/50 backdrop-blur-md w-11/12 max-w-sm animate-in zoom-in-95 fade-in duration-200"
-          : "bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl text-sm font-medium flex items-center gap-3 border border-slate-700/50 backdrop-blur-md"
-      }>
-        {type === 'success' ? <CheckCircle className="w-6 h-6 text-emerald-400 shrink-0" /> : <AlertCircle className="w-6 h-6 text-rose-400 shrink-0" />}
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-6 pointer-events-none">
+      <div className="bg-slate-900 text-white px-5 py-4 rounded-2xl shadow-2xl text-sm font-medium flex items-center gap-3 border border-slate-700/50 backdrop-blur-md w-11/12 max-w-sm animate-in zoom-in-95 fade-in duration-200">
+        {isError ? <AlertCircle className="w-6 h-6 text-rose-400 shrink-0" /> : <CheckCircle className="w-6 h-6 text-emerald-400 shrink-0" />}
         <span className="leading-tight">{message}</span>
       </div>
     </div>
@@ -1529,6 +1525,30 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
                 onChange={handleDplNamaChange} 
                 placeholder="Cari nama dosen..." 
               />
+
+              {/* Bantuan pencarian DPL: kalau nama dosen tidak ketemu di
+                  daftar referensi, arahkan mahasiswa untuk coba tanpa
+                  gelar dulu, baru kalau tetap tidak ketemu hubungi Admin
+                  PMM UNTAD lewat WhatsApp. Link wa.me di bawah sudah
+                  membawa draft pesan (?text=...) berisi template kosong
+                  Nama & NUPTK DPL yang tinggal diisi mahasiswa -- dibuat
+                  dengan encodeURIComponent supaya newline/spasi aman
+                  ter-encode di URL. */}
+              <div className="-mt-2 mb-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 flex gap-3 items-start">
+                <Info className="w-4 h-4 text-slate-400 dark:text-slate-500 shrink-0 mt-0.5" />
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Jika Nama DPL-mu tidak ditemukan pada pilihan, silakan coba mencari dengan nama tanpa gelar terlebih dahulu. Jika masih juga tidak ditemukan, silakan menghubungi{' '}
+                  <a
+                    href={`https://wa.me/6285111355918?text=${encodeURIComponent('Dosen saya tidak ditemukan pada pilihan DPL di profil SIDAMPAK:\n\nNama Lengkap DPL:\nNUPTK DPL:')}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 underline underline-offset-2"
+                  >
+                    WhatsApp Admin PMM UNTAD
+                  </a>.
+                </p>
+              </div>
+
               <Input 
                 label="NUPTK (Otomatis)" 
                 type="text" 
@@ -1721,21 +1741,21 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
 const DocStatusBadge = ({ status }) => {
   if (status === 'uploading') {
     return (
-      <span className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg">
+      <span className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg shrink-0 whitespace-nowrap">
         <Loader2 className="w-3 h-3 animate-spin" /> Mengunggah...
       </span>
     );
   }
   if (status === 'done') {
     return (
-      <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-lg">
+      <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-lg shrink-0 whitespace-nowrap">
         <CheckCircle className="w-3 h-3" /> Tersimpan
       </span>
     );
   }
   if (status === 'error') {
     return (
-      <span className="flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-100 px-2 py-1 rounded-lg">
+      <span className="flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-100 px-2 py-1 rounded-lg shrink-0 whitespace-nowrap">
         <AlertCircle className="w-3 h-3" /> Gagal, coba lagi
       </span>
     );
@@ -1751,14 +1771,27 @@ const DocStatusBadge = ({ status }) => {
 // sudah punya link tersimpan -- klik langsung membuka viewer PDF minimal
 // bawaan Google Drive di tab baru, TANPA fetch/API apa pun ke backend
 // kita (Supabase/GAS) sama sekali, jadi tidak ada kuota yang terpakai.
+//
+// RAPIKAN TAMPILAN MOBILE: sebelumnya baris "nama label + badge status"
+// bisa saling berdempetan/terpotong di layar sempit karena label & badge
+// sama-sama tidak boleh menyusut (badge sudah shrink-0, tapi label belum
+// punya min-w-0 sehingga tidak bisa truncate). Kotak nama file di dalam
+// tombol upload juga rawan mendorong tombol mata (Eye) keluar layar kalau
+// nama dokumennya panjang, karena flex child (div & span) tanpa min-w-0
+// defaultnya TIDAK MAU menyusut di bawah lebar kontennya sendiri --
+// truncate jadi tidak berfungsi walau class "truncate" sudah dipasang.
+// Menambahkan min-w-0 di setiap level flex container/child di bawah ini
+// memaksa teks label untuk benar-benar terpotong (...) alih-alih meluber,
+// sehingga tombol preview (mata) SELALU tetap terlihat rapi di kanan,
+// seukuran tetap (shrink-0), berapa pun panjang nama dokumennya.
 const DocUploadRow = ({ label, docType, value, status, labelText, onUpload }) => (
   <div>
-    <div className="flex items-center justify-between mb-2">
-      <label className="block text-xs font-bold tracking-wide text-slate-500 dark:text-slate-400 uppercase">{label}</label>
+    <div className="flex items-center justify-between gap-2 mb-2">
+      <label className="text-xs font-bold tracking-wide text-slate-500 dark:text-slate-400 uppercase truncate min-w-0">{label}</label>
       <DocStatusBadge status={status} />
     </div>
-    <div className="flex items-center gap-3">
-      <div className="relative flex-1">
+    <div className="flex items-center gap-2 sm:gap-3">
+      <div className="relative flex-1 min-w-0">
         <input
           type="file"
           accept=".pdf"
@@ -1766,10 +1799,10 @@ const DocUploadRow = ({ label, docType, value, status, labelText, onUpload }) =>
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 disabled:cursor-not-allowed"
           onChange={(e) => onUpload(docType, e)}
         />
-        <div className={`p-4 border border-slate-200 dark:border-slate-600 rounded-2xl flex items-center justify-between transition-colors ${value ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:bg-slate-700'}`}>
-          <div className="flex items-center gap-3 truncate">
+        <div className={`p-3.5 sm:p-4 border border-slate-200 dark:border-slate-600 rounded-2xl flex items-center transition-colors ${value ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:bg-slate-700'}`}>
+          <div className="flex items-center gap-2.5 min-w-0 w-full">
             <FileText className={`w-5 h-5 shrink-0 ${value ? 'text-indigo-500' : 'text-slate-400 dark:text-slate-500'}`} />
-            <span className={`text-sm truncate font-medium ${value ? 'text-indigo-800' : 'text-slate-500 dark:text-slate-400'}`}>
+            <span className={`text-sm truncate font-medium min-w-0 ${value ? 'text-indigo-800' : 'text-slate-500 dark:text-slate-400'}`}>
               {labelText}
             </span>
           </div>
@@ -1783,7 +1816,8 @@ const DocUploadRow = ({ label, docType, value, status, labelText, onUpload }) =>
           rel="noreferrer"
           onClick={(e) => e.stopPropagation()}
           title="Pratinjau dokumen"
-          className="relative z-20 shrink-0 w-12 h-12 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl flex items-center justify-center transition-colors shadow-sm"
+          aria-label="Pratinjau dokumen"
+          className="relative z-20 shrink-0 w-11 h-11 sm:w-12 sm:h-12 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl flex items-center justify-center transition-colors shadow-sm"
         >
           <Eye className="w-5 h-5" />
         </a>
