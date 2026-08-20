@@ -1542,7 +1542,7 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
                     href={`https://wa.me/6285111355918?text=${encodeURIComponent('Dosen saya tidak ditemukan pada pilihan DPL di profil SIDAMPAK:\n\nNama Lengkap DPL:\nNUPTK DPL:')}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 underline underline-offset-2"
+                    className="font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300"
                   >
                     WhatsApp Admin PMM UNTAD
                   </a>.
