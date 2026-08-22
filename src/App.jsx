@@ -234,6 +234,32 @@ const getStatusBadgeClass = (status) => {
   return 'bg-slate-100 text-slate-500';
 };
 
+// Validasi REALTIME nomor WA: setiap ketikan langsung disaring supaya
+// HANYA berisi angka dan SELALU diawali "628" (format internasional
+// nomor Indonesia yang dipakai WhatsApp) -- mengantisipasi salah ketik
+// format (mis. pakai "0812...", ada spasi/strip, atau huruf tidak
+// sengaja ikut terketik). Kalau hasil pengeditan sampai menghapus/
+// mengubah prefix "628", input dikembalikan ke "628" saja -- simpel dan
+// predictable. Dipakai bersama di form Daftar (LoginView) DAN Setup
+// Profil (ProfileSetupView, field WA mahasiswa/Mentor/DPL) supaya
+// perilakunya konsisten di seluruh aplikasi.
+const sanitizeWaNumber = (raw) => {
+  const digitsOnly = raw.replace(/\D/g, ''); // buang semua selain angka
+  if (!digitsOnly.startsWith('628')) return '628';
+  return digitsOnly.slice(0, 15); // batas wajar panjang nomor WA Indonesia
+};
+
+// Validasi REALTIME format email -- dipakai untuk menampilkan pesan
+// error langsung di bawah field begitu mahasiswa selesai mengetik
+// sesuatu yang tidak berbentuk email (mis. lupa "@" atau domain), tanpa
+// harus menunggu submit. String kosong dianggap "valid" di sini karena
+// wajib-tidaknya field itu sendiri sudah ditangani terpisah oleh
+// validateStep1/validateStep3 -- fungsi ini murni mengecek FORMAT.
+const isValidEmailFormat = (email) => {
+  if (!email) return true;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim());
+};
+
 // --- COMPONENTS ---
 
 // 1. Reusable UI Components
@@ -454,7 +480,7 @@ const LoginView = ({ onLogin, themeMode, onToggleTheme }) => {
   // --- State form Register ---
   const [regNim, setRegNim] = useState('');
   const [regNama, setRegNama] = useState('');
-  const [regWa, setRegWa] = useState('62');
+  const [regWa, setRegWa] = useState('628');
   const [regPassword, setRegPassword] = useState('');
   const [regPasswordConfirm, setRegPasswordConfirm] = useState('');
   const [regError, setRegError] = useState('');
@@ -514,6 +540,10 @@ const LoginView = ({ onLogin, themeMode, onToggleTheme }) => {
     }
   };
 
+  // Validasi realtime nomor WA (hanya angka, wajib diawali "628") dan
+  // format email memakai helper level-modul sanitizeWaNumber &
+  // isValidEmailFormat di atas, supaya konsisten dengan ProfileSetupView.
+
   const validateRegister = () => {
     if (!regNim.trim() || !regNama.trim() || !regPassword) {
       return 'NIM, Nama, dan Kata Sandi wajib diisi.';
@@ -524,8 +554,8 @@ const LoginView = ({ onLogin, themeMode, onToggleTheme }) => {
     if (regPassword !== regPasswordConfirm) {
       return 'Konfirmasi kata sandi tidak cocok.';
     }
-    if (regWa && !String(regWa).startsWith('62')) {
-      return 'Nomor WhatsApp wajib diawali 62.';
+    if (regWa && !String(regWa).startsWith('628')) {
+      return 'Nomor WhatsApp wajib diawali 628.';
     }
     return '';
   };
@@ -617,7 +647,7 @@ const LoginView = ({ onLogin, themeMode, onToggleTheme }) => {
                   label="Nomor Induk Mahasiswa (NIM)" 
                   placeholder="Contoh: G20118043" 
                   value={nim} 
-                  onChange={(e) => setNim(e.target.value)} 
+                  onChange={(e) => setNim(e.target.value.toUpperCase())} 
                   error={error.includes('NIM') ? " " : ""}
                   icon={User}
                   disabled={isSubmitting}
@@ -691,7 +721,7 @@ const LoginView = ({ onLogin, themeMode, onToggleTheme }) => {
                     label="Nomor Induk Mahasiswa (NIM)"
                     placeholder="Contoh: G20118043"
                     value={forgotNim}
-                    onChange={(e) => setForgotNim(e.target.value)}
+                    onChange={(e) => setForgotNim(e.target.value.toUpperCase())}
                     error={forgotError}
                     icon={User}
                     disabled={isSendingReset}
@@ -725,7 +755,7 @@ const LoginView = ({ onLogin, themeMode, onToggleTheme }) => {
                   label="Nomor Induk Mahasiswa (NIM)" 
                   placeholder="Contoh: G20118043" 
                   value={regNim} 
-                  onChange={(e) => setRegNim(e.target.value)} 
+                  onChange={(e) => setRegNim(e.target.value.toUpperCase())} 
                   error={regError.includes('NIM') ? " " : ""}
                   icon={User}
                   disabled={isRegistering}
@@ -742,9 +772,10 @@ const LoginView = ({ onLogin, themeMode, onToggleTheme }) => {
                 <Input 
                   label="No WhatsApp" 
                   type="tel"
+                  inputMode="numeric"
                   placeholder="628..." 
                   value={regWa} 
-                  onChange={(e) => setRegWa(e.target.value)} 
+                  onChange={(e) => setRegWa(sanitizeWaNumber(e.target.value))} 
                   error={regError.includes('WhatsApp') ? " " : ""}
                   icon={FaWhatsapp}
                   disabled={isRegistering}
@@ -987,11 +1018,11 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
       };
     }
     return {
-      nim: currentNim || '', nama: '', wa: '62', email: '', prodi: '', fakultas: '', jenisProgram: '', 
+      nim: currentNim || '', nama: '', wa: '628', email: '', prodi: '', fakultas: '', jenisProgram: '', 
       namaProgram: '', mitra: '', lokasi: '', tglAwal: '', tglAkhir: '',
       mataKuliah: [], 
-      mentorNama: '', mentorJabatan: '', mentorWa: '62', mentorEmail: '',
-      dplNama: '', dplNuptk: '', dplJabatan: '', dplWa: '62', dplEmail: '',
+      mentorNama: '', mentorJabatan: '', mentorWa: '628', mentorEmail: '',
+      dplNama: '', dplNuptk: '', dplJabatan: '', dplWa: '628', dplEmail: '',
       dokumen: defaultDokumen 
     };
   });
@@ -1083,6 +1114,11 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
   const [tempLokasi, setTempLokasi] = useState('');
 
   const handleChange = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
+  // Wrapper khusus field nomor WA (WA mahasiswa, WA Mentor, WA DPL) --
+  // menerapkan sanitizeWaNumber (helper level-modul) supaya ketiganya
+  // realtime hanya menerima angka dan selalu diawali "628", sama seperti
+  // field No WhatsApp di form Daftar.
+  const handleWaChange = (field, rawValue) => handleChange(field, sanitizeWaNumber(rawValue));
   // Saat nama dosen dipilih dari daftar referensi (tabel Supabase
   // "datadosen"), NUPTK, WA, dan Email OTOMATIS ikut terisi kalau memang
   // ada datanya -- field-fieldnya TETAP input biasa (bukan disabled),
@@ -1205,10 +1241,12 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
     return 'Dokumen tersimpan (klik untuk ganti)';
   };
 
-  const validateStep1 = () => formData.nama && String(formData.wa || '').startsWith('62') && formData.email && formData.prodi && formData.fakultas && formData.lokasi;
+  const validateStep1 = () => formData.nama && String(formData.wa || '').startsWith('628') && formData.email && isValidEmailFormat(formData.email) && formData.prodi && formData.fakultas && formData.lokasi;
   const validateStep3 = () => 
-    (!formData.dplWa || String(formData.dplWa || '').startsWith('62')) && 
-    (!formData.dplNama || !!formData.dplNuptk);
+    (!formData.dplWa || String(formData.dplWa || '').startsWith('628')) && 
+    (!formData.dplNama || !!formData.dplNuptk) &&
+    (!formData.mentorEmail || isValidEmailFormat(formData.mentorEmail)) &&
+    (!formData.dplEmail || isValidEmailFormat(formData.dplEmail));
 
   // --- Simpan per Bagian -- LANGSUNG ke Supabase (Bagian 1, 2, 3), lihat
   // api.saveProfilStep1/2/3 & supabase_profil_rpc.sql. Setiap bagian
@@ -1367,8 +1405,8 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
               <Input label="NIM (Tidak Bisa Diubah)" value={formData.nim} disabled title="NIM ditetapkan saat login" />
               <Input label="Nama Lengkap Sesuai Data SIGA-8" value={formData.nama} onChange={e => handleChange('nama', e.target.value)} />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Input label="No WhatsApp" type="tel" placeholder="628..." value={formData.wa} onChange={e => handleChange('wa', e.target.value)} error={!String(formData.wa || '').startsWith('62') ? "Wajib 62" : ""} />
-                <Input label="Email Aktif" type="email" value={formData.email} onChange={e => handleChange('email', e.target.value)} />
+                <Input label="No WhatsApp" type="tel" inputMode="numeric" placeholder="628..." value={formData.wa} onChange={e => handleWaChange('wa', e.target.value)} error={!String(formData.wa || '').startsWith('628') ? "Wajib 628" : ""} />
+                <Input label="Email Aktif" type="email" value={formData.email} onChange={e => handleChange('email', e.target.value)} error={formData.email && !isValidEmailFormat(formData.email) ? "Format email tidak valid" : ""} />
               </div>
             </div>
 
@@ -1510,8 +1548,8 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
               </h2>
               <Input label="Nama Lengkap" placeholder="Bpk. Budi Santoso" value={formData.mentorNama} onChange={e => handleChange('mentorNama', e.target.value)} />
               <Input label="Jabatan di Mitra" value={formData.mentorJabatan} onChange={e => handleChange('mentorJabatan', e.target.value)} />
-              <Input label="WhatsApp (Awali 62)" type="tel" placeholder="628..." value={formData.mentorWa} onChange={e => handleChange('mentorWa', e.target.value)} />
-              <Input label="Email Aktif" type="email" value={formData.mentorEmail} onChange={e => handleChange('mentorEmail', e.target.value)} />
+              <Input label="WhatsApp (Awali 628)" type="tel" inputMode="numeric" placeholder="628..." value={formData.mentorWa} onChange={e => handleWaChange('mentorWa', e.target.value)} />
+              <Input label="Email Aktif" type="email" value={formData.mentorEmail} onChange={e => handleChange('mentorEmail', e.target.value)} error={formData.mentorEmail && !isValidEmailFormat(formData.mentorEmail) ? "Format email tidak valid" : ""} />
             </div>
 
             <div className="bg-white dark:bg-slate-800 p-6 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-700">
@@ -1557,8 +1595,8 @@ const ProfileSetupView = ({ userProfile, currentNim, masterData, programSuggesti
                 disabled
                 error={formData.dplNama && !formData.dplNuptk ? "Dosen tidak ditemukan di data, hubungi admin" : ""}
               />
-              <Input label="WhatsApp (Awali 62)" type="tel" placeholder="628..." value={formData.dplWa} onChange={e => handleChange('dplWa', e.target.value)} />
-              <Input label="Email Kampus" type="email" value={formData.dplEmail} onChange={e => handleChange('dplEmail', e.target.value)} />
+              <Input label="WhatsApp (Awali 628)" type="tel" inputMode="numeric" placeholder="628..." value={formData.dplWa} onChange={e => handleWaChange('dplWa', e.target.value)} />
+              <Input label="Email Kampus" type="email" value={formData.dplEmail} onChange={e => handleChange('dplEmail', e.target.value)} error={formData.dplEmail && !isValidEmailFormat(formData.dplEmail) ? "Format email tidak valid" : ""} />
             </div>
           </div>
         )}
