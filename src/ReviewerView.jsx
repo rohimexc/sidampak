@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Lock, ChevronLeft, ChevronRight, CheckCircle, AlertCircle, FileText, BookOpen,
-  Download, Send, Loader2, Search, MapPin, FileWarning, X
+  Download, Send, Loader2, Search, MapPin, FileWarning, X, HelpCircle
 } from 'lucide-react';
 import { FaWhatsapp } from 'react-icons/fa';
 import * as XLSX from 'xlsx';
@@ -9,10 +9,7 @@ import * as XLSX from 'xlsx';
 import { api } from './api';
 
 // =====================================================================
-// UTIL LOKAL -- file ini MANDIRI (tidak import dari App.jsx), mengikuti
-// pola yang sama dengan AdminFakultasView.jsx/AdminUniversitasView.jsx --
-// supaya ReviewerView bisa jadi halaman/entry point sendiri (reviewer.html)
-// tanpa harus me-load seluruh App.jsx (Mahasiswa) sekaligus.
+// UTIL LOKAL
 // =====================================================================
 const parseSafeDate = (dateString) => {
   if (!dateString) return new Date();
@@ -36,13 +33,13 @@ const parseSafeDate = (dateString) => {
   const fb = new Date(strDate);
   return isNaN(fb.getTime()) ? new Date() : fb;
 };
+
 const formatDateIndoShort = (rawDate) => {
   if (!rawDate) return '-';
   const d = parseSafeDate(rawDate);
   return isNaN(d.getTime()) ? '-' : d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 };
-// Drive seringkali memblokir tag <img> langsung (CORS/X-Frame-Options).
-// Konversi ke endpoint lh3.googleusercontent.com yang lebih permisif.
+
 const getSafeImageUrl = (url) => {
   if (!url) return '';
   if (String(url).startsWith('data:')) return url;
@@ -53,6 +50,7 @@ const getSafeImageUrl = (url) => {
   }
   return url;
 };
+
 const getStatusBadgeClass = (status) => {
   if (status === 'Disetujui') return 'bg-emerald-100 text-emerald-700';
   if (status === 'Draf') return 'bg-slate-200 text-slate-700';
@@ -63,26 +61,17 @@ const getStatusBadgeClass = (status) => {
   return 'bg-slate-100 text-slate-500';
 };
 
-// Buka WhatsApp Web/App dengan nomor & pesan yang sudah terisi (redaksi
-// siap kirim, mentor/DPL tinggal tekan kirim). Pola sama dengan
-// AdminFakultasView.jsx supaya konsisten se-aplikasi.
 const waLink = (wa, text) => {
   if (!wa) return null;
   const number = String(wa).replace(/[^0-9]/g, '');
   return text ? `https://wa.me/${number}?text=${encodeURIComponent(text)}` : `https://wa.me/${number}`;
 };
 
-// Tanda tangan pesan WA mengikuti role reviewer yang sedang login (Mentor
-// atau DPL) -- reviewerInfo.role dikirim server lewat getReviewerQueue.
 const buildSenderLabel = (reviewerInfo) => {
   if (!reviewerInfo?.nama) return '';
   return reviewerInfo.role === 'dpl' ? `DPL ${reviewerInfo.nama}` : `Mentor ${reviewerInfo.nama}`;
 };
 
-// Redaksi pengingat untuk mahasiswa yang logbook-nya masih kurang dari
-// target. Kalau data progres jam/waktu tersedia dari server, disebutkan
-// angka pastinya (lebih meyakinkan); kalau belum tersedia, tetap jatuh
-// ke redaksi umum supaya tombol tetap bisa dipakai.
 const buildReminderMessage = (m, reviewerInfo) => {
   const adaProgres = typeof m.progressPercentage === 'number';
   const adaWaktu = typeof m.timePercentage === 'number';
@@ -97,10 +86,6 @@ const buildReminderMessage = (m, reviewerInfo) => {
     `Salam,\n${buildSenderLabel(reviewerInfo)}`;
 };
 
-// Fallback penentu "Perlu Perhatian" kalau server belum mengirim flag
-// isAtRisk secara eksplisit di getReviewerQueue -- dihitung dari
-// progressPercentage (jam) vs timePercentage (waktu penugasan), sama
-// seperti logika overallProgress di App.jsx (Dashboard Mahasiswa).
 const computeIsAtRisk = (m) => {
   if (typeof m.isAtRisk === 'boolean') return m.isAtRisk;
   if (typeof m.progressPercentage === 'number' && typeof m.timePercentage === 'number') {
@@ -109,8 +94,103 @@ const computeIsAtRisk = (m) => {
   return false;
 };
 
+// =====================================================================
+// MODAL BANTUAN
+// =====================================================================
+const STATUS_HELP_ITEMS_ = [
+  { no: 1, badges: ['Draf'], desc: 'Logbook atau Laporan masih dalam tahap pengerjaan.', points: ['Hanya dapat dilihat oleh Mahasiswa.', 'Belum dapat dilihat oleh Mentor maupun DPL.'] },
+  { no: 2, badges: ['Menunggu Persetujuan Mentor'], desc: 'Logbook atau Laporan telah dikirim dan sedang menunggu persetujuan dari Mentor.', points: ['Akan muncul di sisi Mentor pada tab Antrean Review.', 'Mentor juga dapat melihat Logbook atau Laporan mahasiswa tertentu melalui tab Mahasiswa, kemudian memilih mahasiswa bimbingannya.'] },
+  { no: 3, badges: ['Menunggu Persetujuan DPL'], desc: 'Logbook atau Laporan telah melalui tahap persetujuan Mentor dan sedang menunggu persetujuan dari DPL.', points: ['Akan muncul di sisi DPL pada tab Antrean Review.', 'DPL juga dapat melihat Logbook atau Laporan mahasiswa tertentu melalui tab Mahasiswa, kemudian memilih mahasiswa bimbingannya.'] },
+  { no: 4, badges: ['Disetujui'], desc: 'Logbook atau Laporan telah selesai melalui seluruh proses persetujuan.', points: ['Sudah disetujui oleh Mentor dan DPL.', 'Tidak ada tindakan lebih lanjut yang perlu dilakukan.'] },
+  { no: 5, badges: ['Revisi Mentor', 'Revisi DPL'], desc: 'Logbook atau Laporan perlu diperbaiki berdasarkan masukan dari Mentor atau DPL.', points: ['Data yang berstatus Revisi akan hilang dari Antrean Review.', 'Logbook atau Laporan akan kembali ke sisi Mahasiswa untuk diperbaiki dan dikirim ulang.'] }
+];
+
+const StatusHelpModal = ({ onClose }) => (
+  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex flex-col justify-end sm:justify-center sm:items-center sm:p-6 transition-all duration-300">
+    <div className="bg-white rounded-t-[2rem] sm:rounded-[2rem] max-h-[90vh] w-full sm:max-w-lg md:max-w-xl flex flex-col shadow-2xl animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-8 duration-300 relative overflow-hidden">
+      <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-100 shrink-0 bg-white">
+        <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+          <HelpCircle className="w-5 h-5 text-indigo-500 shrink-0" /> Status Logbook dan Laporan
+        </h3>
+        <button onClick={onClose} className="p-1.5 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors shrink-0">
+          <X className="w-4 h-4 text-slate-500" />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
+        <p className="text-sm text-slate-500 leading-relaxed mb-5">
+          Logbook dan Laporan memiliki 5 status, yaitu:
+        </p>
+
+        <div className="space-y-6">
+          {STATUS_HELP_ITEMS_.map(item => (
+            <div key={item.no}>
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <span className="w-6 h-6 rounded-full bg-slate-900 text-white text-[11px] font-black flex items-center justify-center shrink-0 shadow-sm">
+                  {item.no}
+                </span>
+                {item.badges.map(b => (
+                  <span key={b} className={`text-[10px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wider ${getStatusBadgeClass(b)}`}>
+                    {b}
+                  </span>
+                ))}
+              </div>
+              <p className="text-sm text-slate-700 font-medium leading-relaxed mb-1.5 break-words">{item.desc}</p>
+              <ul className="text-sm text-slate-500 leading-relaxed list-disc list-inside space-y-1 pl-1">
+                {item.points.map((pt, i) => <li key={i} className="break-words">{pt}</li>)}
+              </ul>
+            </div>
+          ))}
+        </div>
+
+        <div className="h-px bg-slate-100 my-6" />
+
+        <h4 className="text-base font-extrabold text-slate-800 mb-4">Catatan Penting</h4>
+
+        <div className="space-y-5">
+          <div>
+            <p className="text-sm font-bold text-slate-700 mb-1">1. Jika Mahasiswa Tidak Mengisi Data Mentor</p>
+            <p className="text-sm text-slate-500 leading-relaxed break-words">
+              Jika Mahasiswa mengosongkan data Mentor pada profil, maka Logbook dan Laporan tidak akan melalui tahap verifikasi Mentor. Alurnya langsung menuju tahap verifikasi DPL.
+            </p>
+          </div>
+
+          <div>
+            <p className="text-sm font-bold text-slate-700 mb-1">2. Pengisian Logbook Harian</p>
+            <p className="text-sm text-slate-500 leading-relaxed break-words mb-2">
+              Mahasiswa dapat memilih salah satu cara berikut:
+            </p>
+            <ul className="text-sm text-slate-500 leading-relaxed list-disc list-inside space-y-1 pl-1 mb-2">
+              <li className="break-words">Opsi 1: Membuat 1 Logbook yang berisi beberapa kegiatan dalam satu hari.</li>
+              <li className="break-words">Opsi 2: Membuat beberapa Logbook, dengan setiap Logbook berisi 1 kegiatan.</li>
+            </ul>
+            <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3.5 mt-3">
+              <p className="text-sm text-indigo-700 leading-relaxed break-words font-medium">
+                💡 Saran: Gunakan Opsi 1 untuk menghemat penggunaan penyimpanan sistem dan mempermudah rekapitulasi.
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <p className="text-sm font-bold text-slate-700 mb-1">3. Simpan Tautan Antrean</p>
+            <p className="text-sm text-slate-500 leading-relaxed break-words">
+              Setiap pembaruan terkait antrean akan selalu menggunakan tautan (Magic Link) yang sama. Silakan <i>bookmark</i> atau simpan tautan ini.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-6 py-4 border-t border-slate-100 shrink-0 bg-slate-50/50">
+        <button onClick={onClose} className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-sm transition-colors active:scale-[0.98]">
+          Mengerti & Tutup
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
 const PageLoader = ({ label = 'Memuat data...' }) => (
-  <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 h-full">
+  <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 h-full w-full">
     <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
     <p className="mt-4 text-slate-500 font-bold text-sm tracking-widest uppercase text-center px-8">{label}</p>
   </div>
@@ -120,7 +200,7 @@ const ButtonSpinner = ({ className = '' }) => (
 );
 
 // =====================================================================
-// REVIEWER VIEW (Magic Link Mentor/DPL) -- data dari server via api.js
+// REVIEWER VIEW (Mentor/DPL)
 // =====================================================================
 const ReviewerView = ({ reviewerToken, showToast }) => {
   const [activeTab, setActiveTab] = useState('antrean');
@@ -144,10 +224,10 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
   const [selectedLaporans, setSelectedLaporans] = useState([]);
   const [isBulkApproving, setIsBulkApproving] = useState(false);
 
-  // --- Search, filter "Perlu Perhatian", & export Excel di tab Mahasiswa ---
   const [mhsSearchTerm, setMhsSearchTerm] = useState('');
   const [onlyAtRisk, setOnlyAtRisk] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
 
   const hasToken = !!reviewerToken;
 
@@ -256,13 +336,8 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
     }
   };
 
-  const toggleLogSelection = (id) => {
-    setSelectedLogs(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-  };
-
-  const toggleLaporanSelection = (id) => {
-    setSelectedLaporans(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-  };
+  const toggleLogSelection = (id) => setSelectedLogs(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  const toggleLaporanSelection = (id) => setSelectedLaporans(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
 
   const handleSelectAll = () => {
     const isAllSelected = selectedLogs.length === pendingLogs.length && selectedLaporans.length === pendingLaporan.length;
@@ -281,7 +356,6 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
 
     let successCount = 0;
     try {
-      // Loop berurutan (sequential) untuk mencegah limitasi GAS saat request paralel
       for (const id of selectedLaporans) {
         await api.reviewApprove('laporan', id, reviewerToken);
         successCount++;
@@ -290,7 +364,6 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
         await api.reviewApprove('logbook', id, reviewerToken);
         successCount++;
       }
-
       showToast(`${successCount} dokumen berhasil disetujui sekaligus!`, 'success');
       setSelectedLogs([]);
       setSelectedLaporans([]);
@@ -303,13 +376,6 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
     }
   };
 
-  // Dicocokkan pakai kodeMk (Kode MK, stabil) -- BUKAN mkId (ID baris
-  // MkRekognisi, berubah tiap Bagian 2 disimpan ulang lewat
-  // save_profil_step2). pemetaanMk sekarang menyimpan { kodeMk, jam },
-  // BUKAN lagi { mkId, jam } -- lihat catatan yang sama di
-  // App.jsx (DashboardView.mkProgress & LogbookFormView.handleMkMapChange).
-  // Tanpa perbaikan ini, reviewer selalu melihat "Unknown MK" untuk
-  // setiap logbook walau datanya valid.
   const getLogMkNames = (log, mataKuliahList) => {
     if (!log.pemetaanMk || !mataKuliahList) return '';
     return log.pemetaanMk.map(pem => {
@@ -324,9 +390,6 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
     return (mataKuliah || []).map(mk => {
       const targetHours = parseInt(mk.sks) * 45;
       const currentHours = (logbooks || []).reduce((total, lb) => {
-        // Sama seperti getLogMkNames di atas -- cocokkan pakai kodeMk,
-        // bukan mkId, supaya capaian SKS di sisi reviewer sinkron dengan
-        // apa yang dilihat mahasiswa di Dashboard-nya sendiri.
         const mapped = lb.pemetaanMk?.find(m => m.kodeMk === mk.kode);
         return total + (mapped && lb.status !== 'Draf' ? Number(mapped.jam) : 0);
       }, 0);
@@ -335,12 +398,6 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
     });
   }, [detailData]);
 
-  // Mahasiswa Bimbingan + flag "Perlu Perhatian" (dari server kalau ada,
-  // fallback dihitung sendiri dari progressPercentage vs timePercentage
-  // kalau server belum kirim field isAtRisk -- lihat computeIsAtRisk).
-  // Jumlah logbook/laporan pending dihitung dari antrean yang sudah kita
-  // punya di state (pendingLogs/pendingLaporan), jadi tetap akurat walau
-  // field progres jam dari server belum tersedia.
   const mhsListEnriched = useMemo(() => {
     return mhsList.map(m => ({
       ...m,
@@ -361,8 +418,6 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
       (m.mitra || '').toLowerCase().includes(term)
     );
     if (onlyAtRisk) rows = rows.filter(m => m._isAtRisk);
-    // Urutkan yang perlu perhatian ke atas dulu supaya gampang ke-notice
-    // oleh Mentor/DPL tanpa perlu scroll, baru alfabetis di dalam grup.
     rows.sort((a, b) => {
       if (a._isAtRisk !== b._isAtRisk) return a._isAtRisk ? -1 : 1;
       return (a.nama || '').localeCompare(b.nama || '', 'id');
@@ -370,12 +425,6 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
     return rows;
   }, [mhsListEnriched, mhsSearchTerm, onlyAtRisk]);
 
-  // Export Excel daftar Mahasiswa Bimbingan (mengikuti hasil search/filter
-  // yang sedang aktif) -- 1 sheet, kolom-kolom yang tersedia dari data
-  // yang sudah dipunyai reviewer (tanpa perlu fetch tambahan per mahasiswa).
-  // Export Excel daftar Mahasiswa Bimbingan (mengikuti hasil search/filter
-  // yang sedang aktif) -- 2 sheet: (1) Data Mahasiswa lengkap, (2) Detail
-  // MK Rekognisi per mahasiswa.
   const handleExportExcel = () => {
     setIsExporting(true);
     try {
@@ -408,16 +457,10 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
       const ws = XLSX.utils.json_to_sheet(rows);
       ws['!cols'] = Object.keys(rows[0]).map(() => ({ wch: 18 }));
 
-      // Sheet ke-2: detail MK Rekognisi per mahasiswa
       const sheetMk = [];
       filteredMhsList.forEach(m => {
         (m.mataKuliah || []).forEach(mk => {
-          sheetMk.push({
-            NIM: m.nim,
-            'Nama Lengkap': m.nama,
-            'MK Rekognisi': mk.nama,
-            'Progress MK': mk.percentage,
-          });
+          sheetMk.push({ NIM: m.nim, 'Nama Lengkap': m.nama, 'MK Rekognisi': mk.nama, 'Progress MK': mk.percentage });
         });
       });
       const wsMk = XLSX.utils.json_to_sheet(sheetMk);
@@ -437,12 +480,14 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
     }
   };
 
+  // --- RENDERING VIEWS ---
+
   if (!hasToken) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 h-screen p-8 text-center">
-        <Lock className="w-10 h-10 text-rose-500 mb-3" />
-        <p className="text-sm font-bold text-slate-700 mb-1">Akses Ditolak</p>
-        <p className="text-xs text-slate-500">
+        <Lock className="w-12 h-12 text-rose-500 mb-4" />
+        <p className="text-base font-bold text-slate-700 mb-2">Akses Ditolak</p>
+        <p className="text-sm text-slate-500 max-w-sm">
           Halaman ini hanya bisa diakses lewat tautan aman (magic link) yang dikirim ke WhatsApp Mentor/DPL.
         </p>
       </div>
@@ -454,178 +499,204 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
   if (loadError) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 h-screen p-8 text-center">
-        <AlertCircle className="w-10 h-10 text-rose-500 mb-3" />
-        <p className="text-sm font-bold text-slate-700 mb-1">Gagal memuat data</p>
-        <p className="text-xs text-slate-500 mb-4">{loadError}</p>
-        <button onClick={loadQueue} className="px-5 py-2.5 bg-slate-900 text-white text-xs font-bold rounded-xl">Coba Lagi</button>
+        <AlertCircle className="w-12 h-12 text-rose-500 mb-4" />
+        <p className="text-base font-bold text-slate-700 mb-2">Gagal memuat data</p>
+        <p className="text-sm text-slate-500 mb-6 max-w-sm">{loadError}</p>
+        <button onClick={loadQueue} className="px-6 py-3 bg-slate-900 text-white text-sm font-bold rounded-xl active:scale-95 transition-all">Coba Lagi</button>
       </div>
     );
   }
 
+  // ==========================================
+  // VIEW 1: DETAIL MAHASISWA
+  // ==========================================
   if (selectedMhsId) {
     const mhs = mhsList.find(m => m.id === selectedMhsId);
+    
     if (detailLoading || !detailData) {
       return (
-        <div className="flex flex-col h-full bg-slate-50">
-          <div className="bg-white/90 backdrop-blur-md px-6 pt-8 pb-4 shadow-sm border-b border-slate-100 sticky top-0 z-20 flex items-center gap-4">
-            <button onClick={() => setSelectedMhsId(null)} className="p-2 -ml-2 bg-slate-50 hover:bg-slate-100 rounded-2xl transition-colors">
-              <ChevronLeft className="w-6 h-6 text-slate-700" />
-            </button>
-            <h1 className="text-lg font-extrabold text-slate-800 tracking-tight truncate">{mhs?.nama || 'Memuat...'}</h1>
+        <div className="flex flex-col h-screen bg-slate-50 overflow-hidden w-full">
+          <div className="bg-white/90 backdrop-blur-md px-4 sm:px-6 pt-6 pb-4 shadow-sm border-b border-slate-100 z-20 shrink-0">
+            <div className="max-w-7xl mx-auto flex items-center gap-4">
+              <button onClick={() => setSelectedMhsId(null)} className="p-2 -ml-2 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors shrink-0">
+                <ChevronLeft className="w-6 h-6 text-slate-700" />
+              </button>
+              <h1 className="text-lg font-extrabold text-slate-800 tracking-tight truncate">{mhs?.nama || 'Memuat...'}</h1>
+            </div>
           </div>
           <PageLoader label="Memuat data mahasiswa..." />
         </div>
       );
     }
+    
     const mhsLogs = [...(detailData.logbooks || [])].sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal));
     const mhsLaporans = [...(detailData.laporan || [])].sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal));
 
     return (
-      <div className="flex flex-col h-full bg-slate-50">
-        <div className="bg-white/90 backdrop-blur-md px-6 pt-8 pb-4 shadow-sm border-b border-slate-100 sticky top-0 z-20 flex items-center gap-4">
-          <button onClick={() => setSelectedMhsId(null)} className="p-2 -ml-2 bg-slate-50 hover:bg-slate-100 rounded-2xl transition-colors">
-            <ChevronLeft className="w-6 h-6 text-slate-700" />
-          </button>
-          <div className="flex-1 truncate">
-            <h1 className="text-lg font-extrabold text-slate-800 tracking-tight truncate">{detailData.mahasiswa?.nama}</h1>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{detailData.mahasiswa?.nim} • {detailData.mahasiswa?.prodi}</p>
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-20">
-          <div>
-            <h2 className="text-sm font-extrabold text-slate-800 mb-3 uppercase tracking-wider">Capaian SKS</h2>
-            <div className="grid grid-cols-2 gap-3">
-              {selectedMhsMkProgress.map(mk => (
-                <div key={mk.id} className="bg-white p-3 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-3 hover:border-indigo-100 transition-colors">
-                  <div className="relative w-12 h-12 shrink-0">
-                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                      <path strokeDasharray="100, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#F1F5F9" strokeWidth="4" />
-                      <path strokeDasharray={`${mk.percentage}, 100`} d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke={mk.percentage === 100 ? '#10B981' : '#6366F1'} strokeWidth="4" strokeLinecap="round" className="transition-all duration-1000" />
-                    </svg>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-[10px] font-black text-slate-700">{mk.percentage}%</span>
-                    </div>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-bold text-slate-800 truncate leading-tight">{mk.nama}</p>
-                    <p className="text-[9px] font-bold text-slate-400 mt-0.5">{mk.currentHours}/{mk.targetHours} Jam</p>
-                  </div>
-                </div>
-              ))}
-              {selectedMhsMkProgress.length === 0 && (
-                <div className="col-span-2 text-center p-4 bg-slate-100 rounded-2xl border-2 border-dashed border-slate-200">
-                  <p className="text-xs font-medium text-slate-400">Belum ada matakuliah direkognisi.</p>
-                </div>
-              )}
+      <div className="flex flex-col h-screen bg-slate-50 overflow-hidden w-full relative">
+        {/* Sticky Header Detail */}
+        <div className="bg-white/90 backdrop-blur-md px-4 sm:px-6 pt-6 sm:pt-8 pb-4 shadow-sm border-b border-slate-100 z-20 shrink-0 w-full">
+          <div className="max-w-7xl mx-auto flex items-center gap-4">
+            <button onClick={() => setSelectedMhsId(null)} className="p-2 -ml-2 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors shrink-0">
+              <ChevronLeft className="w-6 h-6 text-slate-700" />
+            </button>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-base sm:text-lg font-extrabold text-slate-800 tracking-tight truncate">{detailData.mahasiswa?.nama}</h1>
+              <p className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider truncate">{detailData.mahasiswa?.nim} • {detailData.mahasiswa?.prodi}</p>
             </div>
           </div>
-          <div>
-            <h2 className="text-sm font-extrabold text-slate-800 mb-3 uppercase tracking-wider flex items-center gap-2">
-              <Download className="w-4 h-4 text-emerald-500" /> Laporan Akhir
-            </h2>
-            <div className="space-y-3">
-              {mhsLaporans.map(lap => (
-                <div key={lap.id} className="bg-emerald-50/50 p-4 rounded-2xl shadow-sm border border-emerald-100">
-                  <div className="flex justify-between items-start mb-2">
-                    <span className={`text-[9px] px-2 py-1 rounded-md font-bold uppercase tracking-wider
-                      ${lap.status === 'Disetujui' ? 'bg-emerald-100 text-emerald-700' :
-                        lap.status.includes('Revisi') ? 'bg-rose-100 text-rose-700' :
-                        'bg-amber-100 text-amber-700'}`}>
-                      {lap.status}
-                    </span>
-                    <span className="text-xs font-bold text-slate-500">{formatDateIndoShort(lap.tanggal)}</span>
+        </div>
+
+        {/* Scrollable Detail Content */}
+        <div className="flex-1 overflow-y-auto w-full">
+          <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8 pb-32">
+            
+            {/* Section SKS */}
+            <section>
+              <h2 className="text-sm font-extrabold text-slate-800 mb-3 uppercase tracking-wider">Capaian SKS</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {selectedMhsMkProgress.map(mk => (
+                  <div key={mk.id} className="bg-white p-3.5 sm:p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-3 hover:border-indigo-100 transition-colors">
+                    <div className="relative w-14 h-14 sm:w-16 sm:h-16 shrink-0">
+                      <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                        <path strokeDasharray="100, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#F1F5F9" strokeWidth="4" />
+                        <path strokeDasharray={`${mk.percentage}, 100`} d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke={mk.percentage === 100 ? '#10B981' : '#6366F1'} strokeWidth="4" strokeLinecap="round" className="transition-all duration-1000" />
+                      </svg>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-[11px] sm:text-xs font-black text-slate-700">{mk.percentage}%</span>
+                      </div>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] sm:text-xs font-bold text-slate-800 truncate leading-tight">{mk.nama}</p>
+                      <p className="text-[10px] font-bold text-slate-400 mt-1">{mk.currentHours} / {mk.targetHours} Jam</p>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-emerald-50 mb-3">
-                    <FileText className="w-6 h-6 text-emerald-500 shrink-0" />
-                    {lap.fileLink ? (
-                      <a href={lap.fileLink} target="_blank" rel="noreferrer" className="text-sm font-bold text-indigo-700 truncate hover:underline">{lap.fileName}</a>
-                    ) : (
-                      <p className="text-sm font-bold text-slate-700 truncate">{lap.fileName}</p>
+                ))}
+                {selectedMhsMkProgress.length === 0 && (
+                  <div className="col-span-full text-center p-6 bg-slate-100 rounded-2xl border-2 border-dashed border-slate-200">
+                    <p className="text-xs font-medium text-slate-500">Belum ada matakuliah direkognisi.</p>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* Section Laporan Akhir */}
+            <section>
+              <h2 className="text-sm font-extrabold text-slate-800 mb-3 uppercase tracking-wider flex items-center gap-2">
+                <Download className="w-4 h-4 text-emerald-500" /> Laporan Akhir
+              </h2>
+              <div className="space-y-3">
+                {mhsLaporans.map(lap => (
+                  <div key={lap.id} className="bg-emerald-50/50 p-4 sm:p-5 rounded-2xl shadow-sm border border-emerald-100">
+                    <div className="flex justify-between items-start mb-3">
+                      <span className={`text-[10px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wider
+                        ${lap.status === 'Disetujui' ? 'bg-emerald-100 text-emerald-700' :
+                          lap.status.includes('Revisi') ? 'bg-rose-100 text-rose-700' :
+                          'bg-amber-100 text-amber-700'}`}>
+                        {lap.status}
+                      </span>
+                      <span className="text-xs font-bold text-slate-500">{formatDateIndoShort(lap.tanggal)}</span>
+                    </div>
+                    <div className="flex items-center gap-3 bg-white p-3 sm:p-4 rounded-xl border border-emerald-50 mb-3">
+                      <FileText className="w-6 h-6 sm:w-7 sm:h-7 text-emerald-500 shrink-0" />
+                      {lap.fileLink ? (
+                        <a href={lap.fileLink} target="_blank" rel="noreferrer" className="text-sm font-bold text-indigo-700 truncate hover:underline">{lap.fileName}</a>
+                      ) : (
+                        <p className="text-sm font-bold text-slate-700 truncate">{lap.fileName}</p>
+                      )}
+                    </div>
+
+                    {lap.status.includes('Menunggu') && (
+                      <div className="flex gap-2 sm:gap-3 mt-4">
+                        <button
+                          onClick={() => handleApprove(lap.id, 'laporan')}
+                          disabled={actionLoadingId === lap.id}
+                          className="flex-1 bg-emerald-500 text-white py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 active:scale-95 transition-transform disabled:opacity-70 shadow-sm shadow-emerald-500/20"
+                        >
+                          {actionLoadingId === lap.id ? <ButtonSpinner className="w-4 h-4" /> : null} Approve
+                        </button>
+                        <button onClick={() => setRevisiModal({ isOpen: true, itemId: lap.id, type: 'laporan', text: '' })} className="flex-1 bg-white border border-rose-100 text-rose-600 hover:bg-rose-50 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-bold active:scale-95 transition-transform">Revisi</button>
+                      </div>
                     )}
                   </div>
+                ))}
+                {mhsLaporans.length === 0 && <p className="text-xs font-medium text-slate-500 bg-slate-50 p-6 rounded-2xl border border-slate-100 text-center">Mahasiswa belum mengunggah Laporan Akhir.</p>}
+              </div>
+            </section>
 
-                  {lap.status.includes('Menunggu') && (
-                    <div className="flex gap-2 mt-2">
-                      <button
-                        onClick={() => handleApprove(lap.id, 'laporan')}
-                        disabled={actionLoadingId === lap.id}
-                        className="flex-1 bg-emerald-500 text-white py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 disabled:opacity-70"
-                      >
-                        {actionLoadingId === lap.id ? <ButtonSpinner className="w-3.5 h-3.5" /> : null} Approve
-                      </button>
-                      <button onClick={() => setRevisiModal({ isOpen: true, itemId: lap.id, type: 'laporan', text: '' })} className="flex-1 bg-rose-50 text-rose-600 py-2 rounded-xl text-xs font-bold">Revisi</button>
+            {/* Section Riwayat Logbook */}
+            <section>
+              <h2 className="text-sm font-extrabold text-slate-800 mb-3 uppercase tracking-wider flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-indigo-500" /> Riwayat Logbook
+              </h2>
+              <div className="space-y-4">
+                {mhsLogs.map(log => (
+                  <div key={log.id} className="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-100 hover:border-indigo-100 transition-colors">
+                    <div className="flex justify-between items-start mb-3">
+                      <span className={`text-[10px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wider ${getStatusBadgeClass(log.status)}`}>
+                        {log.status}
+                      </span>
+                      <span className="text-xs font-bold text-slate-500">{formatDateIndoShort(log.tanggal)} • <span className="text-slate-700">{log.durasi} Jam</span></span>
                     </div>
-                  )}
-                </div>
-              ))}
-              {mhsLaporans.length === 0 && <p className="text-xs font-medium text-slate-400 bg-slate-50 p-4 rounded-2xl border border-slate-100 text-center">Mahasiswa belum mengunggah Laporan Akhir.</p>}
-            </div>
-          </div>
-          <div>
-            <h2 className="text-sm font-extrabold text-slate-800 mb-3 uppercase tracking-wider flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-indigo-500" /> Riwayat Logbook
-            </h2>
-            <div className="space-y-4">
-              {mhsLogs.map(log => (
-                <div key={log.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 hover:border-indigo-100 transition-colors">
-                  <div className="flex justify-between items-start mb-2">
-                    <span className={`text-[9px] px-2 py-1 rounded-md font-bold uppercase tracking-wider ${getStatusBadgeClass(log.status)}`}>
-                      {log.status}
-                    </span>
-                    <span className="text-xs font-bold text-slate-500">{formatDateIndoShort(log.tanggal)} • {log.durasi} Jam</span>
+                    
+                    <p className="text-sm font-bold text-slate-800 mb-1.5 break-words">{log.kegiatan.join(', ')}</p>
+                    <p className="text-xs sm:text-sm text-slate-500 mb-3 leading-relaxed break-words whitespace-pre-wrap bg-slate-50 p-3 rounded-xl border border-slate-50">{log.deskripsi}</p>
+
+                    {log.foto && log.foto.length > 0 && (
+                      <div className="flex gap-2 mb-4 overflow-x-auto pb-2 custom-scrollbar">
+                        {log.foto.map((img, i) => (
+                          <a key={i} href={getSafeImageUrl(img)} target="_blank" rel="noreferrer" className="shrink-0">
+                            <img src={getSafeImageUrl(img)} alt={`Doc ${i}`} className="h-16 w-16 sm:h-20 sm:w-20 object-cover rounded-xl border border-slate-200 hover:opacity-90 transition-opacity" />
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                    
+                    <div className="bg-indigo-50/50 px-3 py-2.5 rounded-xl text-[11px] font-medium text-indigo-800 border border-indigo-50 flex items-center gap-2">
+                      <BookOpen className="w-4 h-4 text-indigo-500 shrink-0" /> 
+                      <span className="truncate">{getLogMkNames(log, detailData.mataKuliah)}</span>
+                    </div>
+
+                    {log.status.includes('Menunggu') && (
+                      <div className="flex gap-2 sm:gap-3 mt-4 pt-4 border-t border-slate-100">
+                        <button
+                          onClick={() => handleApprove(log.id, 'logbook')}
+                          disabled={actionLoadingId === log.id}
+                          className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-bold transition-colors flex items-center justify-center gap-2 disabled:opacity-70 active:scale-95 shadow-sm shadow-emerald-500/20"
+                        >
+                          {actionLoadingId === log.id ? <ButtonSpinner className="w-4 h-4" /> : null} Approve
+                        </button>
+                        <button onClick={() => setRevisiModal({ isOpen: true, itemId: log.id, type: 'logbook', text: '' })} className="flex-1 bg-white border border-rose-100 hover:bg-rose-50 text-rose-600 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-bold transition-colors active:scale-95">Revisi</button>
+                      </div>
+                    )}
                   </div>
-                  <p className="text-sm font-bold text-slate-800 mb-1">{log.kegiatan.join(', ')}</p>
-                  <p className="text-xs text-slate-500 mb-2 leading-relaxed">{log.deskripsi}</p>
-
-                  {log.foto && log.foto.length > 0 && (
-                    <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
-                      {log.foto.map((img, i) => (
-                        <a key={i} href={getSafeImageUrl(img)} target="_blank" rel="noreferrer">
-                          <img src={getSafeImageUrl(img)} alt={`Doc ${i}`} className="h-16 w-16 object-cover rounded-lg border border-slate-200" />
-                        </a>
-                      ))}
-                    </div>
-                  )}
-                  <div className="bg-slate-50 px-3 py-2 rounded-xl text-[10px] font-medium text-slate-600 border border-slate-100 flex items-center gap-2">
-                    <BookOpen className="w-3.5 h-3.5 text-indigo-400 shrink-0" /> <span className="truncate">{getLogMkNames(log, detailData.mataKuliah)}</span>
-                  </div>
-
-                  {log.status.includes('Menunggu') && (
-                    <div className="flex gap-2 mt-4 pt-3 border-t border-slate-100">
-                      <button
-                        onClick={() => handleApprove(log.id, 'logbook')}
-                        disabled={actionLoadingId === log.id}
-                        className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-2 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2 disabled:opacity-70"
-                      >
-                        {actionLoadingId === log.id ? <ButtonSpinner className="w-3.5 h-3.5" /> : null} Approve
-                      </button>
-                      <button onClick={() => setRevisiModal({ isOpen: true, itemId: log.id, type: 'logbook', text: '' })} className="flex-1 bg-rose-50 hover:bg-rose-100 text-rose-600 py-2 rounded-xl text-xs font-bold transition-colors">Revisi</button>
-                    </div>
-                  )}
-                </div>
-              ))}
-              {mhsLogs.length === 0 && <p className="text-center text-sm text-slate-400 py-4 border border-dashed border-slate-200 rounded-2xl">Belum ada riwayat.</p>}
-            </div>
+                ))}
+                {mhsLogs.length === 0 && <p className="text-center text-sm text-slate-500 py-8 border-2 border-dashed border-slate-200 rounded-2xl">Belum ada riwayat aktivitas.</p>}
+              </div>
+            </section>
           </div>
         </div>
 
+        {/* Modal Revisi dalam View Detail */}
         {revisiModal.isOpen && (
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex flex-col justify-end">
-            <div className="bg-white rounded-t-[2rem] p-6 animate-in slide-in-from-bottom-full duration-300">
-              <h3 className="text-lg font-bold text-slate-800 mb-2">Catatan Revisi {revisiModal.type === 'logbook' ? 'Logbook' : 'Laporan'}</h3>
-              <p className="text-xs text-slate-500 mb-4">Beritahu mahasiswa apa yang perlu diperbaiki.</p>
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex flex-col justify-end sm:justify-center sm:items-center sm:p-6 transition-all duration-300">
+            <div className="bg-white rounded-t-[2rem] sm:rounded-[2rem] p-6 w-full sm:max-w-md flex flex-col shadow-2xl animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-8 duration-300 relative">
+              <h3 className="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-rose-500" /> Catatan Revisi {revisiModal.type === 'logbook' ? 'Logbook' : 'Laporan'}
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-500 mb-4">Beritahu mahasiswa apa yang perlu diperbaiki.</p>
               <textarea
                 autoFocus
                 disabled={isSubmittingRevisi}
-                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl h-32 resize-none text-sm focus:ring-2 focus:ring-indigo-500 outline-none mb-4 disabled:opacity-60"
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl h-32 resize-none text-sm focus:ring-2 focus:ring-indigo-500 outline-none mb-5 font-medium text-slate-700 disabled:opacity-60"
                 placeholder="Contoh: Tolong lengkapi dengan format yang benar..."
                 value={revisiModal.text}
                 onChange={(e) => setRevisiModal({ ...revisiModal, text: e.target.value })}
               />
               <div className="flex gap-3">
-                <button onClick={() => setRevisiModal({ isOpen: false, itemId: null, type: '', text: '' })} disabled={isSubmittingRevisi} className="px-6 py-3.5 bg-slate-100 text-slate-600 font-bold rounded-xl text-sm hover:bg-slate-200 disabled:opacity-50">Batal</button>
-                <button onClick={handleSubmitRevisi} disabled={isSubmittingRevisi} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm flex justify-center items-center gap-2 shadow-lg shadow-indigo-600/30 disabled:opacity-70">
-                  {isSubmittingRevisi ? <ButtonSpinner className="w-4 h-4" /> : <Send className="w-4 h-4" />} Kirim Revisi
+                <button onClick={() => setRevisiModal({ isOpen: false, itemId: null, type: '', text: '' })} disabled={isSubmittingRevisi} className="px-6 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-sm transition-colors disabled:opacity-50 active:scale-95">Batal</button>
+                <button onClick={handleSubmitRevisi} disabled={isSubmittingRevisi} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm flex justify-center items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all active:scale-95 disabled:opacity-70">
+                  {isSubmittingRevisi ? <ButtonSpinner className="w-4 h-4" /> : <Send className="w-4 h-4" />} Kirim
                 </button>
               </div>
             </div>
@@ -635,380 +706,424 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
     );
   }
 
+  // ==========================================
+  // VIEW 2: MAIN DASHBOARD (Antrean & Mahasiswa)
+  // ==========================================
   const isAllSelected = (pendingLogs.length > 0 || pendingLaporan.length > 0) && (selectedLogs.length === pendingLogs.length && selectedLaporans.length === pendingLaporan.length);
   const totalSelectedCount = selectedLogs.length + selectedLaporans.length;
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 relative">
-      <div className="bg-slate-900 text-white px-6 pt-10 pb-20 rounded-b-[2.5rem] shadow-xl relative overflow-hidden shrink-0">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl"></div>
-        <p className="text-emerald-400 font-bold text-[10px] tracking-widest uppercase mb-1 flex items-center gap-2">
-          <Lock className="w-3 h-3" /> Akses Aman (Token)
-        </p>
-        <h1 className="text-2xl font-extrabold tracking-tight">Portal Reviewer</h1>
-        {reviewerInfo?.nama && (
-          <p className="text-sm text-slate-300 mt-1">
-            Halo, {reviewerInfo.role === 'dpl' ? 'Bapak/Ibu Dosen' : 'Bapak/Ibu'} <span className="font-bold text-white">{reviewerInfo.nama}</span>
-          </p>
-        )}
+    <div className="flex flex-col h-screen bg-slate-50 relative overflow-hidden font-sans">
+      
+      {/* Header Banner - Responsive Max Width */}
+      <div className="bg-slate-900 text-white pt-4 pb-14 rounded-b-[2.5rem] shadow-xl relative shrink-0 w-full z-10">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        
+        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+          <button
+            onClick={() => setShowHelpModal(true)}
+            title="Status Logbook & Laporan"
+            className="absolute top-0 right-4 sm:right-6 lg:right-8 z-20 p-2.5 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors active:scale-95"
+          >
+            <HelpCircle className="w-5 h-5" />
+          </button>
+        
 
-        <div className="grid grid-cols-3 gap-3 sm:gap-6 mt-6 md:px-10">
-          <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 sm:p-5 border border-white/10 flex flex-col items-center justify-center">
-            <p className="text-xl font-black text-white">{mhsList.length}</p>
-            <p className="text-[8px] font-bold text-slate-300 uppercase tracking-wider mt-1">Mhs</p>
+          <div className="flex items-center gap-3 sm:gap-4 mb-4 sm:mb-5">
+            <img src="/untad.png" alt="Logo UNTAD" className="h-12 sm:h-16 w-auto object-contain" />
+            <span className="text-2xl sm:text-3xl font-black tracking-widest text-white">SIDAMPAK</span>
           </div>
-          <div className="bg-indigo-500/20 backdrop-blur-md rounded-2xl p-3 sm:p-5 border border-indigo-500/30 flex flex-col items-center justify-center relative">
-            {pendingLogs.length > 0 && <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full animate-ping"></span>}
-            {pendingLogs.length > 0 && <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full"></span>}
-            <p className="text-xl font-black text-indigo-300">{pendingLogs.length}</p>
-            <p className="text-[8px] font-bold text-indigo-300/70 uppercase tracking-wider mt-1">Logbook</p>
-          </div>
-          <div className="bg-emerald-500/20 backdrop-blur-md rounded-2xl p-3 sm:p-5 border border-emerald-500/30 flex flex-col items-center justify-center relative">
-            {pendingLaporan.length > 0 && <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full animate-ping"></span>}
-            {pendingLaporan.length > 0 && <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full"></span>}
-            <p className="text-xl font-black text-emerald-300">{pendingLaporan.length}</p>
-            <p className="text-[8px] font-bold text-emerald-300/70 uppercase tracking-wider mt-1">Laporan</p>
+
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight">Portal Reviewer</h1>
+          {reviewerInfo?.nama && (
+            <p className="text-sm sm:text-base text-slate-300 mt-1 max-w-sm sm:max-w-md truncate">
+              Halo, {reviewerInfo.role === 'dpl' ? 'Bapak/Ibu Dosen' : 'Bapak/Ibu'} <span className="font-bold text-white">{reviewerInfo.nama}</span>
+            </p>
+          )}
+
+          <div className="grid grid-cols-3 gap-3 sm:gap-5 mt-6 sm:mt-8 max-w-7xl">
+            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 sm:p-5 border border-white/10 flex flex-col items-center justify-center">
+              <p className="text-xl sm:text-2xl md:text-3xl font-black text-white">{mhsList.length}</p>
+              <p className="text-[9px] sm:text-[10px] md:text-xs font-bold text-slate-300 uppercase tracking-wider mt-1">Mhs</p>
+            </div>
+            <div className="bg-indigo-500/20 backdrop-blur-md rounded-2xl p-3 sm:p-5 border border-indigo-500/30 flex flex-col items-center justify-center relative">
+              {pendingLogs.length > 0 && <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-rose-500 rounded-full animate-ping"></span>}
+              {pendingLogs.length > 0 && <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-rose-500 rounded-full border-2 border-slate-900"></span>}
+              <p className="text-xl sm:text-2xl md:text-3xl font-black text-indigo-300">{pendingLogs.length}</p>
+              <p className="text-[9px] sm:text-[10px] md:text-xs font-bold text-indigo-300/80 uppercase tracking-wider mt-1">Logbook</p>
+            </div>
+            <div className="bg-emerald-500/20 backdrop-blur-md rounded-2xl p-3 sm:p-5 border border-emerald-500/30 flex flex-col items-center justify-center relative">
+              {pendingLaporan.length > 0 && <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-amber-500 rounded-full animate-ping"></span>}
+              {pendingLaporan.length > 0 && <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-amber-500 rounded-full border-2 border-slate-900"></span>}
+              <p className="text-xl sm:text-2xl md:text-3xl font-black text-emerald-300">{pendingLaporan.length}</p>
+              <p className="text-[9px] sm:text-[10px] md:text-xs font-bold text-emerald-300/80 uppercase tracking-wider mt-1">Laporan</p>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="px-6 -mt-6 relative z-10 mb-4 shrink-0">
-        <div className="bg-white rounded-2xl shadow-lg shadow-slate-900/5 p-1 flex gap-1 border border-slate-100">
-          <button
-            onClick={() => setActiveTab('antrean')}
-            className={`flex-1 py-3 text-xs font-bold rounded-xl transition-all ${activeTab === 'antrean' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
-          >
-            Antrean Review
-          </button>
-          <button
-            onClick={() => setActiveTab('mahasiswa')}
-            className={`flex-1 py-3 text-xs font-bold rounded-xl transition-all relative flex items-center justify-center gap-1.5 ${activeTab === 'mahasiswa' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
-          >
-            Mahasiswa
-            {atRiskCount > 0 && (
-              <span className={`text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center ${activeTab === 'mahasiswa' ? 'bg-rose-500 text-white' : 'bg-rose-100 text-rose-600'}`}>
-                {atRiskCount}
-              </span>
-            )}
-          </button>
+      {/* Tabs - Centered with max-w */}
+      <div className="px-4 sm:px-6 lg:px-8 -mt-6 relative z-20 mb-3 shrink-0 w-full">
+        <div className="max-w-7xl mx-auto">
+          <div className="bg-white rounded-2xl shadow-lg shadow-slate-900/5 p-1 flex gap-1 border border-slate-100 max-w-7xl">
+            <button
+              onClick={() => setActiveTab('antrean')}
+              className={`flex-1 py-3 text-xs sm:text-sm font-bold rounded-xl transition-all ${activeTab === 'antrean' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+            >
+              Antrean Review
+            </button>
+            <button
+              onClick={() => setActiveTab('mahasiswa')}
+              className={`flex-1 py-3 text-xs sm:text-sm font-bold rounded-xl transition-all relative flex items-center justify-center gap-2 ${activeTab === 'mahasiswa' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+            >
+              Mahasiswa
+              {atRiskCount > 0 && (
+                <span className={`text-[9px] sm:text-[10px] font-black w-4.5 h-4.5 sm:w-5 sm:h-5 rounded-full flex items-center justify-center px-1.5 ${activeTab === 'mahasiswa' ? 'bg-rose-500 text-white' : 'bg-rose-100 text-rose-600'}`}>
+                  {atRiskCount}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 pt-2 pb-32 relative">
-        {activeTab === 'antrean' && (
-          (pendingLogs.length === 0 && pendingLaporan.length === 0) ? (
-            <div className="bg-white p-10 rounded-[2rem] text-center border border-slate-100 shadow-sm mt-4">
-              <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                <CheckCircle className="w-10 h-10 text-emerald-500" />
-              </div>
-              <h3 className="text-lg font-bold text-slate-800 mb-1">Semua Selesai!</h3>
-              <p className="text-sm font-medium text-slate-500">Tidak ada antrean logbook maupun laporan.</p>
-            </div>
-          ) : (
-            <div className="space-y-5">
-
-              <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-100 shadow-sm sticky top-0 z-20">
-                <h3 className="font-bold text-slate-700 text-sm">Aksi Massal</h3>
-                <button
-                  onClick={handleSelectAll}
-                  className="text-xs font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-xl hover:bg-indigo-100 transition-colors"
-                >
-                  {isAllSelected ? 'Batal Pilih Semua' : 'Pilih Semua'}
-                </button>
-              </div>
-
-              {pendingLaporan.length > 0 && (
-                <div className="mb-6">
-                  <h3 className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-3 flex items-center gap-2"><Download className="w-3.5 h-3.5" /> Antrean Laporan Akhir</h3>
-                  <div className="space-y-4">
-                    {pendingLaporan.map(lap => {
-                      const mhs = lap.mahasiswa || mhsList.find(m => m.id === lap.nim) || {};
-                      const isSelected = selectedLaporans.includes(lap.id);
-                      return (
-                        <div key={lap.id} className={`bg-emerald-50/50 p-5 rounded-[2rem] shadow-sm border transition-colors ${isSelected ? 'border-emerald-400 bg-emerald-100/50' : 'border-emerald-100'}`}>
-                          <div className="flex justify-between items-start mb-4 border-b border-emerald-100/50 pb-4">
-                            <div className="flex items-center gap-3">
-                              <div
-                                className="w-6 h-6 border-2 rounded-md flex items-center justify-center cursor-pointer transition-colors shrink-0"
-                                onClick={(e) => { e.stopPropagation(); toggleLaporanSelection(lap.id); }}
-                                style={{ borderColor: isSelected ? '#10B981' : '#CBD5E1', backgroundColor: isSelected ? '#10B981' : 'transparent' }}
-                              >
-                                {isSelected && <CheckCircle className="w-4 h-4 text-white" />}
-                              </div>
-
-                              <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center font-bold text-emerald-700">
-                                {mhs.nama?.charAt(0) || '?'}
-                              </div>
-                              <div>
-                                <h3 className="font-bold text-slate-800">{mhs.nama}</h3>
-                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{mhs.nim}</p>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-xs font-bold text-slate-800">{formatDateIndoShort(lap.tanggal)}</p>
-                              <span className="text-[9px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-md mt-1 inline-block">Pending</span>
-                            </div>
-                          </div>
-
-                          <div className="mb-4 bg-white p-3 rounded-xl border border-emerald-50 flex items-center gap-3">
-                            <FileText className="w-6 h-6 text-emerald-500 shrink-0" />
-                            {lap.fileLink ? (
-                              <a href={lap.fileLink} target="_blank" rel="noreferrer" className="text-sm font-bold text-indigo-700 truncate hover:underline">{lap.fileName}</a>
-                            ) : (
-                              <p className="text-sm font-bold text-slate-700 truncate">{lap.fileName}</p>
-                            )}
-                          </div>
-
-                          <div className="flex gap-3 mt-4 pt-3 border-t border-emerald-100/50">
-                            <button
-                              onClick={() => handleApprove(lap.id, 'laporan')}
-                              disabled={actionLoadingId === lap.id || isBulkApproving}
-                              className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-2xl text-sm font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95 flex justify-center items-center gap-2 disabled:opacity-70"
-                            >
-                              {actionLoadingId === lap.id ? <ButtonSpinner className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />} Setujui
-                            </button>
-                            <button onClick={() => setRevisiModal({ isOpen: true, itemId: lap.id, type: 'laporan', text: '' })} className="flex-1 bg-white hover:bg-rose-50 text-rose-600 border border-rose-100 py-3 rounded-2xl text-sm font-bold transition-all active:scale-95 flex justify-center items-center gap-2">
-                              <AlertCircle className="w-4 h-4" /> Revisi
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+      {/* Scrollable Main Area */}
+      <div className="flex-1 overflow-y-auto w-full relative pb-32">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-2 pb-8">
+          
+          {/* TAB: ANTREAN */}
+          {activeTab === 'antrean' && (
+            (pendingLogs.length === 0 && pendingLaporan.length === 0) ? (
+              <div className="bg-white p-8 sm:p-12 rounded-[2rem] text-center border border-slate-100 shadow-sm mt-4 w-full">
+                <div className="w-20 h-20 sm:w-24 sm:h-24 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-5">
+                  <CheckCircle className="w-10 h-10 sm:w-12 sm:h-12 text-emerald-500" />
                 </div>
-              )}
-
-              {pendingLogs.length > 0 && (
-                <div>
-                  <h3 className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest mb-3 flex items-center gap-2"><BookOpen className="w-3.5 h-3.5" /> Antrean Logbook Harian</h3>
-                  <div className="space-y-4">
-                    {pendingLogs.map(log => {
-                      const mhs = log.mahasiswa || {};
-                      const isSelected = selectedLogs.includes(log.id);
-                      return (
-                        <div key={log.id} className={`bg-white p-5 rounded-[2rem] shadow-sm border transition-colors ${isSelected ? 'border-emerald-400 bg-emerald-50/30' : 'border-slate-100'}`}>
-                          <div className="flex justify-between items-start mb-4 border-b border-slate-50 pb-4">
-                            <div className="flex items-center gap-3">
-                              <div
-                                className="w-6 h-6 border-2 rounded-md flex items-center justify-center cursor-pointer transition-colors shrink-0"
-                                onClick={(e) => { e.stopPropagation(); toggleLogSelection(log.id); }}
-                                style={{ borderColor: isSelected ? '#10B981' : '#CBD5E1', backgroundColor: isSelected ? '#10B981' : 'transparent' }}
-                              >
-                                {isSelected && <CheckCircle className="w-4 h-4 text-white" />}
-                              </div>
-
-                              <div className="w-10 h-10 bg-indigo-50 rounded-full flex items-center justify-center font-bold text-indigo-600">
-                                {mhs.nama?.charAt(0) || '?'}
-                              </div>
-                              <div>
-                                <h3 className="font-bold text-slate-800">{mhs.nama}</h3>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{mhs.nim}</p>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-xs font-bold text-slate-800">{formatDateIndoShort(log.tanggal)}</p>
-                              <p className="text-[10px] font-bold text-slate-500 mt-0.5">{log.durasi} Jam</p>
-                            </div>
-                          </div>
-
-                          <div className="mb-4">
-                            <p className="text-sm font-bold text-slate-800 mb-1">{log.kegiatan.join(', ')}</p>
-                            <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100 leading-relaxed mb-3">
-                              {log.deskripsi}
-                            </p>
-                          </div>
-
-                          <div className="flex gap-3 mt-4 pt-3 border-t border-slate-50">
-                            <button
-                              onClick={() => handleApprove(log.id, 'logbook')}
-                              disabled={actionLoadingId === log.id || isBulkApproving}
-                              className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-2xl text-sm font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95 flex justify-center items-center gap-2 disabled:opacity-70"
-                            >
-                              {actionLoadingId === log.id ? <ButtonSpinner className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />} Setujui
-                            </button>
-                            <button onClick={() => setRevisiModal({ isOpen: true, itemId: log.id, type: 'logbook', text: '' })} className="flex-1 bg-rose-50 hover:bg-rose-100 text-rose-600 py-3 rounded-2xl text-sm font-bold transition-all active:scale-95 flex justify-center items-center gap-2">
-                              <AlertCircle className="w-4 h-4" /> Revisi
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          )
-        )}
-
-        {activeTab === 'mahasiswa' && (
-          <div className="space-y-4">
-            {/* SEARCH + FILTER + EXPORT */}
-            <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-100 space-y-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Cari nama, NIM, prodi, atau mitra..."
-                  value={mhsSearchTerm}
-                  onChange={(e) => setMhsSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                />
-                {mhsSearchTerm && (
-                  <button onClick={() => setMhsSearchTerm('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600">
-                    <X className="w-3.5 h-3.5" />
+                <h3 className="text-lg sm:text-xl font-bold text-slate-800 mb-2">Semua Selesai!</h3>
+                <p className="text-sm text-slate-500 max-w-xs mx-auto">Tidak ada antrean logbook maupun laporan yang perlu direview saat ini.</p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-100 shadow-sm sticky top-0 z-20">
+                  <h3 className="font-bold text-slate-700 text-sm">Aksi Massal</h3>
+                  <button
+                    onClick={handleSelectAll}
+                    className="text-xs font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-xl hover:bg-indigo-100 transition-colors active:scale-95"
+                  >
+                    {isAllSelected ? 'Batal Pilih Semua' : 'Pilih Semua'}
                   </button>
+                </div>
+
+                {pendingLaporan.length > 0 && (
+                  <div className="mb-8">
+                    <h3 className="text-[10px] sm:text-xs font-bold text-emerald-600 uppercase tracking-widest mb-4 flex items-center gap-2"><Download className="w-4 h-4" /> Antrean Laporan Akhir</h3>
+                    <div className="space-y-4">
+                      {pendingLaporan.map(lap => {
+                        const mhs = lap.mahasiswa || mhsList.find(m => m.id === lap.nim) || {};
+                        const isSelected = selectedLaporans.includes(lap.id);
+                        return (
+                          <div key={lap.id} className={`bg-emerald-50/40 p-4 sm:p-6 rounded-3xl shadow-sm border transition-colors ${isSelected ? 'border-emerald-400 bg-emerald-100/40' : 'border-emerald-100/60'}`}>
+                            <div className="flex justify-between items-start mb-4 border-b border-emerald-100/50 pb-4">
+                              <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0 pr-3">
+                                <div
+                                  className="w-6 h-6 sm:w-7 sm:h-7 border-2 rounded-lg flex items-center justify-center cursor-pointer transition-colors shrink-0 bg-white"
+                                  onClick={(e) => { e.stopPropagation(); toggleLaporanSelection(lap.id); }}
+                                  style={{ borderColor: isSelected ? '#10B981' : '#CBD5E1', backgroundColor: isSelected ? '#10B981' : 'white' }}
+                                >
+                                  {isSelected && <CheckCircle className="w-4 h-4 text-white" />}
+                                </div>
+                                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-100 rounded-full flex items-center justify-center font-bold text-emerald-700 text-lg shrink-0">
+                                  {mhs.nama?.charAt(0) || '?'}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <h3 className="font-bold text-slate-800 text-sm sm:text-base truncate">{mhs.nama}</h3>
+                                  <p className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider truncate">{mhs.nim}</p>
+                                </div>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <p className="text-[11px] sm:text-xs font-bold text-slate-800">{formatDateIndoShort(lap.tanggal)}</p>
+                                <span className="text-[9px] sm:text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-md mt-1.5 inline-block uppercase tracking-wide">Pending</span>
+                              </div>
+                            </div>
+
+                            <div className="mb-5 bg-white p-3.5 sm:p-4 rounded-2xl border border-emerald-50 flex items-center gap-3 sm:gap-4 shadow-sm">
+                              <FileText className="w-6 h-6 sm:w-7 sm:h-7 text-emerald-500 shrink-0" />
+                              {lap.fileLink ? (
+                                <a href={lap.fileLink} target="_blank" rel="noreferrer" className="text-sm sm:text-base font-bold text-indigo-700 truncate hover:underline">{lap.fileName}</a>
+                              ) : (
+                                <p className="text-sm sm:text-base font-bold text-slate-700 truncate">{lap.fileName}</p>
+                              )}
+                            </div>
+
+                            <div className="flex gap-2 sm:gap-4 mt-2">
+                              <button
+                                onClick={() => handleApprove(lap.id, 'laporan')}
+                                disabled={actionLoadingId === lap.id || isBulkApproving}
+                                className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-3 sm:py-3.5 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95 flex justify-center items-center gap-2 disabled:opacity-70"
+                              >
+                                {actionLoadingId === lap.id ? <ButtonSpinner className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />} Setujui
+                              </button>
+                              <button onClick={() => setRevisiModal({ isOpen: true, itemId: lap.id, type: 'laporan', text: '' })} className="flex-1 bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold transition-all active:scale-95 flex justify-center items-center gap-2">
+                                <AlertCircle className="w-4 h-4" /> Revisi
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {pendingLogs.length > 0 && (
+                  <div>
+                    <h3 className="text-[10px] sm:text-xs font-bold text-indigo-600 uppercase tracking-widest mb-4 flex items-center gap-2"><BookOpen className="w-4 h-4" /> Antrean Logbook Harian</h3>
+                    <div className="space-y-4 sm:space-y-6">
+                      {pendingLogs.map(log => {
+                        const mhs = log.mahasiswa || {};
+                        const isSelected = selectedLogs.includes(log.id);
+                        return (
+                          <div key={log.id} className={`bg-white p-4 sm:p-6 rounded-3xl shadow-sm border transition-colors ${isSelected ? 'border-emerald-400 bg-emerald-50/40' : 'border-slate-100 hover:border-slate-200'}`}>
+                            <div className="flex justify-between items-start mb-4 border-b border-slate-50 pb-4">
+                              <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0 pr-3">
+                                <div
+                                  className="w-6 h-6 sm:w-7 sm:h-7 border-2 rounded-lg flex items-center justify-center cursor-pointer transition-colors shrink-0 bg-white"
+                                  onClick={(e) => { e.stopPropagation(); toggleLogSelection(log.id); }}
+                                  style={{ borderColor: isSelected ? '#10B981' : '#CBD5E1', backgroundColor: isSelected ? '#10B981' : 'white' }}
+                                >
+                                  {isSelected && <CheckCircle className="w-4 h-4 text-white" />}
+                                </div>
+                                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-50 rounded-full flex items-center justify-center font-bold text-indigo-600 text-lg shrink-0">
+                                  {mhs.nama?.charAt(0) || '?'}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <h3 className="font-bold text-slate-800 text-sm sm:text-base truncate">{mhs.nama}</h3>
+                                  <p className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider truncate">{mhs.nim}</p>
+                                </div>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <p className="text-[11px] sm:text-xs font-bold text-slate-800">{formatDateIndoShort(log.tanggal)}</p>
+                                <p className="text-[10px] sm:text-xs font-bold text-slate-500 mt-0.5">{log.durasi} Jam</p>
+                              </div>
+                            </div>
+
+                            <div className="mb-5 pl-0 sm:pl-11">
+                              <p className="text-sm sm:text-base font-bold text-slate-800 mb-2 break-words">{log.kegiatan.join(', ')}</p>
+                              <p className="text-xs sm:text-sm text-slate-600 bg-slate-50 p-3.5 sm:p-4 rounded-2xl border border-slate-100/80 leading-relaxed mb-4 break-words whitespace-pre-wrap">
+                                {log.deskripsi}
+                              </p>
+
+                              {log.foto && log.foto.length > 0 && (
+                                <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 custom-scrollbar">
+                                  {log.foto.map((img, i) => (
+                                    <a key={i} href={getSafeImageUrl(img)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="shrink-0">
+                                      <img src={getSafeImageUrl(img)} alt={`Doc ${i}`} className="h-16 w-16 sm:h-24 sm:w-24 object-cover rounded-xl border border-slate-200 hover:opacity-90 transition-opacity" />
+                                    </a>
+                                  ))}
+                                </div>
+                              )}
+
+                              {log.pemetaanMk && log.pemetaanMk.length > 0 && (
+                                <div className="mt-4 bg-indigo-50/50 px-3.5 py-3 rounded-2xl border border-indigo-50">
+                                  <p className="text-[9px] sm:text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                    <BookOpen className="w-3.5 h-3.5 text-indigo-400 shrink-0" /> Pemetaan MK
+                                  </p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {log.pemetaanMk.map((pem, i) => (
+                                      <span key={i} className="text-[10px] sm:text-[11px] font-semibold text-indigo-800 bg-white border border-indigo-100 px-2.5 py-1.5 rounded-lg break-words shadow-sm">
+                                        {pem.nama} <span className="text-indigo-400 font-bold ml-1">· {pem.jam} jam</span>
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex gap-2 sm:gap-4 pt-4 border-t border-slate-50 pl-0 sm:pl-11">
+                              <button
+                                onClick={() => handleApprove(log.id, 'logbook')}
+                                disabled={actionLoadingId === log.id || isBulkApproving}
+                                className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-3 sm:py-3.5 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95 flex justify-center items-center gap-2 disabled:opacity-70"
+                              >
+                                {actionLoadingId === log.id ? <ButtonSpinner className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />} Setujui
+                              </button>
+                              <button onClick={() => setRevisiModal({ isOpen: true, itemId: log.id, type: 'logbook', text: '' })} className="flex-1 bg-rose-50 hover:bg-rose-100 text-rose-600 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold transition-all active:scale-95 flex justify-center items-center gap-2">
+                                <AlertCircle className="w-4 h-4" /> Revisi
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 )}
               </div>
+            )
+          )}
 
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setOnlyAtRisk(prev => !prev)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-colors border
-                    ${onlyAtRisk ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-rose-600 border-rose-200 hover:bg-rose-50'}`}
-                >
-                  <AlertCircle className="w-3.5 h-3.5" /> Perlu Perhatian {atRiskCount > 0 ? `(${atRiskCount})` : ''}
-                </button>
-                <button
-                  onClick={handleExportExcel}
-                  disabled={isExporting}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors disabled:opacity-60"
-                >
-                  {isExporting ? <ButtonSpinner className="w-3.5 h-3.5" /> : <Download className="w-3.5 h-3.5" />} Export Excel
-                </button>
-              </div>
-            </div>
+          {/* TAB: MAHASISWA */}
+          {activeTab === 'mahasiswa' && (
+            <div className="space-y-4">
+              <div className="bg-white p-3.5 sm:p-5 rounded-2xl shadow-sm border border-slate-100 space-y-3 sm:space-y-4">
+                <div className="relative">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Cari nama, NIM, prodi..."
+                    value={mhsSearchTerm}
+                    onChange={(e) => setMhsSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-9 py-3 sm:py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow"
+                  />
+                  {mhsSearchTerm && (
+                    <button onClick={() => setMhsSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 bg-slate-200 rounded-full">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
 
-            {/* LIST MAHASISWA */}
-            <div className="space-y-3">
-              {filteredMhsList.map(mhs => {
-                const totalPending = mhs._pendingLogCount + mhs._pendingLaporanCount;
-                const adaProgres = typeof mhs.progressPercentage === 'number';
-                const waHref = waLink(mhs.wa, buildReminderMessage(mhs, reviewerInfo));
-
-                return (
-                  <div
-                    key={mhs.id}
-                    className={`bg-white p-4 rounded-2xl shadow-sm border transition-all group ${mhs._isAtRisk ? 'border-rose-200 shadow-rose-100/50' : 'border-slate-100 hover:border-indigo-200'}`}
+                <div className="flex gap-2 sm:gap-3 flex-col sm:flex-row">
+                  <button
+                    onClick={() => setOnlyAtRisk(prev => !prev)}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs sm:text-sm font-bold transition-all border
+                      ${onlyAtRisk ? 'bg-rose-600 text-white border-rose-600 shadow-md shadow-rose-500/20' : 'bg-white text-rose-600 border-rose-200 hover:bg-rose-50'}`}
                   >
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setSelectedMhsId(mhs.id)}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedMhsId(mhs.id); } }}
-                      className="flex items-center gap-4 cursor-pointer"
-                    >
-                      <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold shrink-0 transition-colors ${mhs._isAtRisk ? 'bg-rose-50 text-rose-600' : 'bg-slate-100 group-hover:bg-indigo-100 text-slate-500 group-hover:text-indigo-600'}`}>
-                        {mhs.nama.charAt(0)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-bold text-slate-800 truncate">{mhs.nama}</h3>
-                          {mhs._isAtRisk && (
-                            <span className="shrink-0 flex items-center gap-1 bg-rose-100 text-rose-700 text-[9px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wide">
-                              <AlertCircle className="w-2.5 h-2.5" /> Perhatian
-                            </span>
+                    <AlertCircle className="w-4 h-4" /> Perlu Perhatian {atRiskCount > 0 ? `(${atRiskCount})` : ''}
+                  </button>
+                  <button
+                    onClick={handleExportExcel}
+                    disabled={isExporting}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs sm:text-sm font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors disabled:opacity-60 border border-emerald-100"
+                  >
+                    {isExporting ? <ButtonSpinner className="w-4 h-4" /> : <Download className="w-4 h-4" />} Export Excel
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-3 sm:space-y-4">
+                {filteredMhsList.map(mhs => {
+                  const totalPending = mhs._pendingLogCount + mhs._pendingLaporanCount;
+                  const adaProgres = typeof mhs.progressPercentage === 'number';
+                  const waHref = waLink(mhs.wa, buildReminderMessage(mhs, reviewerInfo));
+
+                  return (
+                    <div key={mhs.id} className={`bg-white p-4 sm:p-5 rounded-2xl sm:rounded-3xl shadow-sm border transition-all group ${mhs._isAtRisk ? 'border-rose-200 shadow-rose-100/40' : 'border-slate-100 hover:border-indigo-200'}`}>
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setSelectedMhsId(mhs.id)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedMhsId(mhs.id); } }}
+                        className="flex items-center gap-4 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-xl"
+                      >
+                        <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center font-bold text-lg shrink-0 transition-colors ${mhs._isAtRisk ? 'bg-rose-50 text-rose-600' : 'bg-slate-100 group-hover:bg-indigo-100 text-slate-500 group-hover:text-indigo-600'}`}>
+                          {mhs.nama.charAt(0)}
+                        </div>
+                        <div className="flex-1 min-w-0 pr-2">
+                          <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                            <h3 className="font-bold text-slate-800 text-sm sm:text-base truncate max-w-full">{mhs.nama}</h3>
+                            {mhs._isAtRisk && (
+                              <span className="shrink-0 flex items-center gap-1 bg-rose-100 text-rose-700 text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wide">
+                                <AlertCircle className="w-2.5 h-2.5" /> Perhatian
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">{mhs.nim} • {mhs.prodi}</p>
+                          {mhs.mitra && (
+                            <p className="text-[10px] sm:text-[11px] text-slate-500 flex items-center gap-1 mt-1 truncate">
+                              <MapPin className="w-3 h-3 shrink-0" /> {mhs.mitra}
+                            </p>
                           )}
                         </div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider truncate">{mhs.nim} • {mhs.prodi}</p>
-                        {mhs.mitra && (
-                          <p className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5 truncate">
-                            <MapPin className="w-3 h-3 shrink-0" /> {mhs.mitra}
-                          </p>
-                        )}
+                        <div className="flex flex-col items-end gap-1.5 shrink-0">
+                          <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-indigo-500 transition-colors" />
+                          {totalPending > 0 && <span className="bg-amber-100 text-amber-700 text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-md">{totalPending} Antrean</span>}
+                        </div>
                       </div>
-                      <div className="flex flex-col items-end gap-1 shrink-0">
-                        <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-indigo-500 transition-colors" />
-                        {totalPending > 0 && <span className="bg-amber-100 text-amber-700 text-[9px] font-bold px-2 py-0.5 rounded-md">{totalPending} Antrean</span>}
-                      </div>
+
+                      {adaProgres && (
+                        <div className="mt-4 pt-4 border-t border-slate-50">
+                          <div className="flex justify-between items-baseline mb-1.5">
+                            <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wide">Progres Jam Logbook</span>
+                            <span className={`text-[10px] sm:text-[11px] font-black ${mhs._isAtRisk ? 'text-rose-600' : 'text-indigo-600'}`}>{mhs.progressPercentage}%</span>
+                          </div>
+                          <div className="w-full h-1.5 sm:h-2 bg-slate-100 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-1000 ${mhs._isAtRisk ? 'bg-rose-500' : mhs.progressPercentage >= 100 ? 'bg-emerald-500' : 'bg-indigo-500'}`}
+                              style={{ width: `${Math.min(100, mhs.progressPercentage)}%` }}
+                            />
+                          </div>
+                          {(typeof mhs.currentHours === 'number' && typeof mhs.targetHours === 'number') && (
+                            <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 mt-1.5">{mhs.currentHours} / {mhs.targetHours} Jam</p>
+                          )}
+                        </div>
+                      )}
+
+                      {waHref && (
+                        <a
+                          href={waHref}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className={`mt-4 flex items-center justify-center gap-2 w-full py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-bold transition-all active:scale-95
+                            ${mhs._isAtRisk ? 'bg-rose-600 text-white hover:bg-rose-700 shadow-md shadow-rose-500/20' : 'bg-slate-50 text-slate-500 hover:bg-slate-100 border border-slate-200'}`}
+                        >
+                          <FaWhatsapp className="w-4 h-4" />
+                          {mhs._isAtRisk ? 'Ingatkan via WhatsApp' : 'Hubungi Mahasiswa'}
+                        </a>
+                      )}
                     </div>
+                  );
+                })}
 
-                    {adaProgres && (
-                      <div className="mt-3">
-                        <div className="flex justify-between items-baseline mb-1">
-                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Progres Jam Logbook</span>
-                          <span className={`text-[10px] font-black ${mhs._isAtRisk ? 'text-rose-600' : 'text-indigo-600'}`}>{mhs.progressPercentage}%</span>
-                        </div>
-                        <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${mhs._isAtRisk ? 'bg-rose-500' : mhs.progressPercentage >= 100 ? 'bg-emerald-500' : 'bg-indigo-500'}`}
-                            style={{ width: `${Math.min(100, mhs.progressPercentage)}%` }}
-                          />
-                        </div>
-                        {(typeof mhs.currentHours === 'number' && typeof mhs.targetHours === 'number') && (
-                          <p className="text-[9px] font-bold text-slate-400 mt-1">{mhs.currentHours}/{mhs.targetHours} Jam</p>
-                        )}
-                      </div>
-                    )}
-
-                    {waHref && (
-                      <a
-                        href={waHref}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className={`mt-3 flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-xs font-bold transition-colors
-                          ${mhs._isAtRisk ? 'bg-rose-600 text-white hover:bg-rose-700' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}
-                      >
-                        <FaWhatsapp className="w-3.5 h-3.5" />
-                        {mhs._isAtRisk ? 'Ingatkan Isi Logbook' : 'Kirim Pesan WA'}
-                      </a>
-                    )}
+                {filteredMhsList.length === 0 && (
+                  <div className="text-center p-8 sm:p-12 bg-white rounded-3xl border-2 border-dashed border-slate-200">
+                    <FileWarning className="w-8 h-8 sm:w-10 sm:h-10 text-slate-300 mx-auto mb-3" />
+                    <p className="text-sm font-medium text-slate-500">Tidak ada mahasiswa yang cocok dengan pencarian atau filter.</p>
                   </div>
-                );
-              })}
-
-              {filteredMhsList.length === 0 && (
-                <div className="text-center p-8 bg-white rounded-2xl border-2 border-dashed border-slate-200">
-                  <FileWarning className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                  <p className="text-sm font-medium text-slate-400">Tidak ada mahasiswa yang cocok dengan pencarian/filter.</p>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
+      {/* Floating Action Button (Bulk Approve) */}
       {totalSelectedCount > 0 && activeTab === 'antrean' && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-11/12 max-w-lg bg-slate-900 text-white p-4 rounded-2xl shadow-2xl z-40 flex justify-between items-center animate-in slide-in-from-bottom-10 border border-slate-700">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-11/12 max-w-lg bg-slate-900 text-white p-4 rounded-2xl shadow-2xl z-[90] flex justify-between items-center animate-in slide-in-from-bottom-10 border border-slate-700">
           <div className="flex flex-col">
             <span className="text-sm font-bold flex items-center gap-2">
               <span className="w-5 h-5 bg-indigo-500 text-white rounded-full flex items-center justify-center text-[10px]">{totalSelectedCount}</span>
               Item Terpilih
             </span>
-            <button
-              onClick={() => { setSelectedLogs([]); setSelectedLaporans([]); }}
-              className="text-[10px] text-slate-400 text-left hover:text-white transition-colors mt-1"
-            >
+            <button onClick={() => { setSelectedLogs([]); setSelectedLaporans([]); }} className="text-[10px] text-slate-400 text-left hover:text-white transition-colors mt-1">
               Batalkan Pilihan
             </button>
           </div>
           <button
             onClick={handleBulkApprove}
             disabled={isBulkApproving}
-            className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-3 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors disabled:opacity-70 shadow-lg shadow-emerald-500/20"
+            className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-3 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-transform active:scale-95 disabled:opacity-70 shadow-lg shadow-emerald-500/20"
           >
             {isBulkApproving ? <ButtonSpinner className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />} Setujui Terpilih
           </button>
         </div>
       )}
 
+      {/* Modal Revisi (Dashboard View) */}
       {revisiModal.isOpen && (
-        <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex flex-col justify-end">
-          <div className="bg-white rounded-t-[2rem] p-6 animate-in slide-in-from-bottom-full duration-300 shadow-[0_-20px_40px_-10px_rgba(0,0,0,0.2)]">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex flex-col justify-end sm:justify-center sm:items-center sm:p-6 transition-all duration-300">
+          <div className="bg-white rounded-t-[2rem] sm:rounded-[2rem] p-6 w-full sm:max-w-md flex flex-col shadow-2xl animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-8 duration-300 relative">
             <h3 className="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2">
               <AlertCircle className="w-5 h-5 text-rose-500" /> Catatan Revisi {revisiModal.type === 'logbook' ? 'Logbook' : 'Laporan'}
             </h3>
-            <p className="text-xs text-slate-500 mb-4">Beritahu mahasiswa apa yang perlu diperbaiki.</p>
+            <p className="text-xs sm:text-sm text-slate-500 mb-4">Beritahu mahasiswa apa yang perlu diperbaiki.</p>
             <textarea
               autoFocus
               disabled={isSubmittingRevisi}
-              className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl h-32 resize-none text-sm focus:ring-2 focus:ring-indigo-500 outline-none mb-4 font-medium text-slate-700 disabled:opacity-60"
+              className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl h-32 resize-none text-sm focus:ring-2 focus:ring-indigo-500 outline-none mb-5 font-medium text-slate-700 disabled:opacity-60"
               placeholder="Contoh: Tolong lengkapi deskripsi dengan hasil dari rapat..."
               value={revisiModal.text}
               onChange={(e) => setRevisiModal({ ...revisiModal, text: e.target.value })}
             />
             <div className="flex gap-3">
-              <button onClick={() => setRevisiModal({ isOpen: false, itemId: null, type: '', text: '' })} disabled={isSubmittingRevisi} className="px-6 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-sm transition-colors disabled:opacity-50">Batal</button>
+              <button onClick={() => setRevisiModal({ isOpen: false, itemId: null, type: '', text: '' })} disabled={isSubmittingRevisi} className="px-6 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-sm transition-colors disabled:opacity-50 active:scale-95">Batal</button>
               <button onClick={handleSubmitRevisi} disabled={isSubmittingRevisi} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm flex justify-center items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all active:scale-95 disabled:opacity-70">
                 {isSubmittingRevisi ? <ButtonSpinner className="w-4 h-4" /> : <Send className="w-4 h-4" />} Kirim Revisi
               </button>
@@ -1017,11 +1132,7 @@ const ReviewerView = ({ reviewerToken, showToast }) => {
         </div>
       )}
 
-      <div className="absolute bottom-6 left-0 right-0 flex justify-center z-0 pointer-events-none">
-        <span className="bg-slate-200/50 backdrop-blur-sm text-slate-500 text-[9px] font-bold px-3 py-1.5 rounded-full">
-          Portal aman, tidak memerlukan sesi login.
-        </span>
-      </div>
+      {showHelpModal && <StatusHelpModal onClose={() => setShowHelpModal(false)} />}
     </div>
   );
 };

@@ -24,10 +24,10 @@ function ReviewerEntry() {
 
   return (
     <div className="bg-slate-100 min-h-screen font-sans flex justify-center">
-      <div className="w-full max-w-2xl bg-white min-h-screen shadow-2xl overflow-hidden relative flex flex-col">
+      <div className="w-full max-w-7xl bg-white min-h-screen shadow-2xl overflow-hidden relative flex flex-col">
         {toast.message && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-top-4 fade-in duration-300 w-11/12 max-w-sm pointer-events-none">
-            <div className="bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl text-sm font-medium">
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-4 fade-in duration-300 w-11/12 max-w-sm pointer-events-none text-center">
+            <div className="bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl text-sm font-medium inline-block">
               {toast.message}
             </div>
           </div>
